@@ -1,16 +1,17 @@
 
 // ENTER EXPERIMENT INFORMATION HERE:
-long PRE_STIM_PERIOD = 5000;           // enter the time before first stimulus (milliseconds)
-long STIM_BOUT_DURATION = 2000;           // enter the duration of stimulus bouts (milliseconds)
-long STIM_FREQUENCY = 4;                  //enter the frequency of stimulus (Hertz)
-long PULSE_WIDTH = 125;            //enter stimulus pulse width (milliseconds)
-long RECOVER_BOUT_DURATION = 2000;    //enter the duration of inter-stimulus recovery periods (milliseconds)
-long POST_STIM_PERIOD = 5000;          //enter the duration of post-stimulus observation (milliseconds)
-long STIM_BOUT_NUM = 20;                // enter the number of stimulus bouts
+int PRE_STIM_PERIOD = 5000;           // enter the time before first stimulus (milliseconds)
+int STIM_BOUT_DURATION = 2000;           // enter the duration of stimulus bouts (milliseconds)
+int STIM_FREQUENCY = 4;                  //enter the frequency of stimulus (Hertz)
+int PULSE_WIDTH = 125;            //enter stimulus pulse width (milliseconds)
+int RECOVER_BOUT_DURATION = 2000;    //enter the duration of inter-stimulus recovery periods (milliseconds)
+int POST_STIM_PERIOD = 5000;          //enter the duration of post-stimulus observation (milliseconds)
+int STIM_BOUT_NUM = 20;                // enter the number of stimulus bouts
 
 
 
 //--------------------DO NOT CHANGE ANYTHING BELOW THIS LINE----------------------------------------------
+int PERIOD = 1000/STIM_FREQUENCY;
 
 const int stimPin1 =  0;      // stimulus 1: on (pulsed) during stimulus bouts on set 1
 const int indPin1 =  1;      // indicator 1: on (constant) during stimulus bouts on set 1
@@ -26,41 +27,66 @@ const int progPin3 =  10;      // program 1: on when program is engaged on set 3
 const int initPin3 =  11;      // initializer 1: high when button is pressed on set 3
 const int test = 12;
 
-PERIOD = 1000/FREQUENCY
+//GLOBAL VARIABLES:
+boolean lastReading1;  
+boolean buttonState1 = LOW;
+boolean lastButtonState1;
+boolean lastReading2;  
+boolean buttonState2 = LOW;
+boolean lastButtonState2;
+boolean lastReading3;  
+boolean buttonState3 = LOW;
+boolean lastButtonState3;
+boolean run1 = false;
+boolean run2 = false;
+boolean run3 = false;
+
+
 //------------------------------------------------------------------------------------------------------------
 
 void setup()
 {
   Serial.begin(9600);
+  pinMode(stimPin1, OUTPUT);  
+  pinMode(indPin1, OUTPUT); 
+  pinMode(progPin1, OUTPUT); 
+  pinMode(initPin1, INPUT);  
+  pinMode(stimPin2, OUTPUT);  
+  pinMode(indPin2, OUTPUT); 
+  pinMode(progPin2, OUTPUT); 
+  pinMode(initPin2, INPUT);    
+  pinMode(stimPin3, OUTPUT);  
+  pinMode(indPin3, OUTPUT); 
+  pinMode(progPin3, OUTPUT); 
+  pinMode(initPin3, INPUT); 
+  pinMode(test, OUTPUT);
+}
+
+
+
+int programRun(int initTime, int initPin, int stimPin, int indPin, int progPin, boolean running) {
   
+  //unsigned long boutBegin = millis();
+  int boutCount;
+  unsigned long cycleTime;
+  
+  digitalWrite(progPin, HIGH);  //illuminate program indicator LED.
+  
+  if ((boutCount < STIM_BOUT_NUM) && (millis() >= (initTime + ((STIM_BOUT_DURATION) + (RECOVER_BOUT_DURATION))*(boutCount) + PRE_STIM_PERIOD))) {
+    if (cycleTime < (initTime + ((STIM_BOUT_DURATION) + (RECOVER_BOUT_DURATION))*(boutCount) + PRE_STIM_PERIOD)) {
+      pulseTrain(stimPin, indPin);
+      boutCount += 1;
+    }
+    
+  }    
+  if(boutCount > STIM_BOUT_NUM){
+    digitalWrite(progPin, LOW);
+    
+
+  cycleTime = millis();
 }
 
-void loop()
-{
-  //do stuff, main
-}
-
-void buttonPress()
-{
-  //input: initTime = time when the button is pressed
-  //input: initPin = the button that was pressed
-  //output: expBegin = the time the experiment starts
-  //output: stimPin = which pin to use as stimulus
-  //output: indPin = which pin to use as indicator light
-  //output: progPin = which pin to use as program indicator
-}
-
-void programRun(exp_begin, stimPin, indPin, progPin)
-{
-  //illuminate progPin
-  //wait for pre-stim period
-  //initiate a pulse train by calling pulseTrain(boutBegin)
-  //repeat pulseTrain until stim bout num is reached
-  //wait for post-stim period
-  //turn off progPin
-}
-
-void pulseTrain(boutBegin, stimPin, indPin)
+int pulseTrain()
 {
   
   // pulseCount == 0
@@ -74,3 +100,48 @@ void pulseTrain(boutBegin, stimPin, indPin)
   //else
     //turn off indPin
     //return boutCount +=1
+}
+
+void loop() {
+  unsigned long currentMillis = millis();
+  int initPin;
+  int stimPin;
+  int indPin;
+  int progPin;
+  
+  //READ BUTTON SET 1:
+  int reading1 = digitalRead(initPin1);
+  if (reading1 != lastReading1) {
+    lastButtonState1 = reading1;
+    if (reading1 == HIGH) {
+      run1 = true;
+    }
+  }
+  if(run1 = true){
+      programRun(currentMillis, initPin1, stimPin1, indPin1, progPin1);
+  }
+    
+  //READ BUTTON SET 2:
+  int reading2 = digitalRead(initPin2);
+  if (reading2 != lastReading2) {
+    lastButtonState2 = reading2;
+    if (reading2 == HIGH) {
+      run2 = true;
+    }
+  } 
+  if(run2=true) {
+    programRun(currentMillis, initPin2, stimPin2, indPin2, progPin2);
+  }
+  
+  //READ BUTTON SET 3:
+  int reading3 = digitalRead(initPin3);
+  if (reading3 != lastReading3) {
+    lastButtonState3 = reading3;
+    if (reading3 == HIGH) {
+      run3 = true;
+    }
+  } 
+  if(run3=true) {
+    programRun(currentMillis, initPin3, stimPin3, indPin3, progPin3);
+  }
+}
