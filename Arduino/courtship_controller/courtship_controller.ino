@@ -83,8 +83,10 @@ int programRun(int initTime, int initPin, int stimPin, int indPin, int progPin) 
     }
     
   }    
-  if(boutCount > STIM_BOUT_NUM){
+  if(millis() > (initTime + ((STIM_BOUT_DURATION) + (RECOVER_BOUT_DURATION))*(STIM_BOUT_NUM) + PRE_STIM_PERIOD + POST_STIM_PERIOD))  {
     digitalWrite(progPin, LOW);
+    digitalWrite(indPin, LOW);
+    digitalWrite(stimPin, LOW);
   }  
 
   cycleTime = millis();
@@ -93,10 +95,10 @@ int programRun(int initTime, int initPin, int stimPin, int indPin, int progPin) 
 int pulseTrain(int stimPin, int indPin, unsigned long pulseBegin) {
   int pulseCount = 0;
   int pulseState = 1;
-  int prevPulseState = 1
+  int prevPulseState = 1;
   unsigned long pulseTime;
   
-  if (millis() <= (pulseBegin + STIM_BOUT_DURATION) {
+  if (millis() <= (pulseBegin + STIM_BOUT_DURATION)) {
     digitalWrite(indPin, HIGH);
     if ((millis() < (pulseBegin + PULSE_WIDTH + (PERIOD)*(pulseCount))) && (millis() >= (pulseBegin + (PERIOD)*(pulseCount)))) {
       digitalWrite(stimPin, HIGH);
@@ -131,7 +133,7 @@ void loop() {
   if (reading1 != lastReading1) {
     lastButtonState1 = reading1;
     if (reading1 == HIGH) {
-      unsigned long initTime = currentMillis
+      unsigned long initTime = currentMillis;
       programRun(initTime, initPin1, stimPin1, indPin1, progPin1);
       //run1 = true;
     }
