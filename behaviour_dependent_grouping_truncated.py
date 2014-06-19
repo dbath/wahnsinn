@@ -92,7 +92,7 @@ for k in paramlist:
     for i in paramlist:
         cols = [col for col in averages.columns if i in col]
         cols = [col for col in cols if ', bin' in col]
-        x = (np.arange(len(averages[cols].columns)))*BIN_SIZE - (BIN_SIZE)/2
+        x = (np.arange(len(averages[cols].columns)))*BIN_SIZE + (BIN_SIZE)/2
         #ys = [averages.ix[j,cols] for j in averages.index]
         ys = averages[cols]   
         sems = semaverages[cols] 
@@ -101,7 +101,7 @@ for k in paramlist:
         for j in ys.index:
             p = plt.plot(x, ys.ix[j], linewidth=2, label=j, zorder=100)
             plt.fill_between(x, ys.ix[j] + sems.ix[j], ys.ix[j] - sems.ix[j], alpha=0.05, zorder=90)
-        ax.set_xlim((np.amin(x),np.amax(x)))
+        ax.set_xlim((np.amin(x),300)) #np.amax(x)))
         ax.set_xlabel('Time (s), binned to '+ str(BIN_SIZE) + 's')
         ax.set_ylim(0,1.3*(ys.values.max()))
         ax.set_ylabel(INDEX_NAME[paramlist.index(i)])
@@ -135,7 +135,7 @@ for k in paramlist:
     for i in paramlist:
         cols = [col for col in averages.columns if i in col]
         cols = [col for col in cols if ', bin' in col]
-        x = (np.arange(len(averages[cols].columns)))*BIN_SIZE - (BIN_SIZE)/2
+        x = (np.arange(len(averages[cols].columns)))*BIN_SIZE + (BIN_SIZE)/2
         #ys = [averages.ix[j,cols] for j in averages.index]
         ys = averages[cols]   
         sems = semaverages[cols] 
@@ -144,7 +144,7 @@ for k in paramlist:
         for j in ys.index:
             p = plt.plot(x, ys.ix[j], linewidth=2, label=j, zorder=100)
             plt.fill_between(x, ys.ix[j] + sems.ix[j], ys.ix[j] - sems.ix[j], alpha=0.05, zorder=90)
-        ax.set_xlim((np.amin(x),np.amax(x)))
+        ax.set_xlim((np.amin(x),300)) #np.amax(x)))
         ax.set_xlabel('Time (s), binned to '+ str(BIN_SIZE) + 's')
         ax.set_ylim(0,1.3*(ys.values.max()))
         ax.set_ylabel(INDEX_NAME[paramlist.index(i)])
@@ -180,7 +180,7 @@ semaverages = np.divide(stdaverages, sqrtnaverages)
 for i in paramlist:
     cols = [col for col in averages.columns if i in col]
     cols = [col for col in cols if ', bin' in col]
-    x = (np.arange(len(averages[cols].columns)))*BIN_SIZE - (BIN_SIZE)/2
+    x = (np.arange(len(averages[cols].columns)))*BIN_SIZE + (BIN_SIZE)/2
     #ys = [averages.ix[j,cols] for j in averages.index]
     ys = averages[cols]   
     sems = semaverages[cols] 
@@ -189,7 +189,7 @@ for i in paramlist:
     for j in ys.index:
         p = plt.plot(x, ys.ix[j], linewidth=2, label=j, zorder=100)
         plt.fill_between(x, ys.ix[j] + sems.ix[j], ys.ix[j] - sems.ix[j], alpha=0.05, zorder=90)
-        ax.set_xlim((np.amin(x),np.amax(x)))
+        ax.set_xlim((np.amin(x),300)) #np.amax(x)))
         ax.set_xlabel('Time (s), binned to '+ str(BIN_SIZE) + 's')
         ax.set_ylim(0,1.3*(ys.values.max()))
     ax.set_ylabel(INDEX_NAME[paramlist.index(i)])
@@ -212,7 +212,7 @@ semaverages = np.divide(stdaverages, sqrtnaverages)
 for i in paramlist:
     cols = [col for col in averages.columns if i in col]
     cols = [col for col in cols if ', bin' in col]
-    x = (np.arange(len(averages[cols].columns)))*BIN_SIZE - (BIN_SIZE)/2
+    x = (np.arange(len(averages[cols].columns)))*BIN_SIZE + (BIN_SIZE)/2
     #ys = [averages.ix[j,cols] for j in averages.index]
     ys = averages[cols]   
     sems = semaverages[cols] 
@@ -221,7 +221,7 @@ for i in paramlist:
     for j in ys.index:
         p = plt.plot(x, ys.ix[j], linewidth=2, label=j, zorder = 100)
         plt.fill_between(x, ys.ix[j] + sems.ix[j], ys.ix[j] - sems.ix[j], alpha=0.05, zorder=90)
-        ax.set_xlim((np.amin(x),np.amax(x)))
+        ax.set_xlim((np.amin(x),300)) #np.amax(x)))
         ax.set_xlabel('Time (s), binned to '+ str(BIN_SIZE) + 's')
         ax.set_ylim(0,1.3*(ys.values.max()))
     ax.set_ylabel(INDEX_NAME[paramlist.index(i)])
