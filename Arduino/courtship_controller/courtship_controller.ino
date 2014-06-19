@@ -64,42 +64,59 @@ void setup()
 
 
 
-int programRun(int initTime, int initPin, int stimPin, int indPin, int progPin, boolean running) {
+int programRun(int initTime, int initPin, int stimPin, int indPin, int progPin) {
   
   //unsigned long boutBegin = millis();
   int boutCount;
   unsigned long cycleTime;
   
-  digitalWrite(progPin, HIGH);  //illuminate program indicator LED.
+  if (millis() < (initTime + ((STIM_BOUT_DURATION) + (RECOVER_BOUT_DURATION))*(STIM_BOUT_NUM) + PRE_STIM_PERIOD + POST_STIM_PERIOD)){
+    digitalWrite(progPin, HIGH);  //illuminate program indicator LED.
+  }
+  else { digitalWrite(progPin, LOW); }
   
   if ((boutCount < STIM_BOUT_NUM) && (millis() >= (initTime + ((STIM_BOUT_DURATION) + (RECOVER_BOUT_DURATION))*(boutCount) + PRE_STIM_PERIOD))) {
     if (cycleTime < (initTime + ((STIM_BOUT_DURATION) + (RECOVER_BOUT_DURATION))*(boutCount) + PRE_STIM_PERIOD)) {
-      pulseTrain(stimPin, indPin);
+      unsigned long pulseBegin = millis();
+      pulseTrain(stimPin, indPin, pulseBegin);
       boutCount += 1;
     }
     
   }    
   if(boutCount > STIM_BOUT_NUM){
     digitalWrite(progPin, LOW);
-    
+  }  
 
   cycleTime = millis();
 }
 
-int pulseTrain()
-{
+int pulseTrain(int stimPin, int indPin, unsigned long pulseBegin) {
+  int pulseCount = 0;
+  int pulseState = 1;
+  int prevPulseState = 1
+  unsigned long pulseTime;
   
-  // pulseCount == 0
-  //if time is less than (boutBegin + STIM_BOUT_DURATION):
-    //illuminate indPin
-    //if time is less than boutBegin + PERIOD*pulseCount + PULSE_WIDTH:
-      //turn on stimPin
-    //else
-      //turn off stimPin
-      //increase pulseCount by 1
-  //else
-    //turn off indPin
-    //return boutCount +=1
+  if (millis() <= (pulseBegin + STIM_BOUT_DURATION) {
+    digitalWrite(indPin, HIGH);
+    if ((millis() < (pulseBegin + PULSE_WIDTH + (PERIOD)*(pulseCount))) && (millis() >= (pulseBegin + (PERIOD)*(pulseCount)))) {
+      digitalWrite(stimPin, HIGH);
+      pulseState = 1;
+    }
+    else { 
+      digitalWrite(stimPin, LOW);
+      pulseState = 0;
+    }
+    if (prevPulseState != pulseState) {
+      if (pulseState = 0) {
+        pulseCount += 1;
+      }
+      prevPulseState = pulseState;
+    }   
+  }
+  else {
+    digitalWrite(stimPin, LOW);
+    digitalWrite(indPin, LOW);
+  }
 }
 
 void loop() {
@@ -114,12 +131,14 @@ void loop() {
   if (reading1 != lastReading1) {
     lastButtonState1 = reading1;
     if (reading1 == HIGH) {
-      run1 = true;
+      unsigned long initTime = currentMillis
+      programRun(initTime, initPin1, stimPin1, indPin1, progPin1);
+      //run1 = true;
     }
   }
-  if(run1 = true){
-      programRun(currentMillis, initPin1, stimPin1, indPin1, progPin1);
-  }
+  //if(run1 = true){
+  //    programRun(currentMillis, initPin1, stimPin1, indPin1, progPin1);    CHECK THESE IN 2 & 3
+  //}
     
   //READ BUTTON SET 2:
   int reading2 = digitalRead(initPin2);
