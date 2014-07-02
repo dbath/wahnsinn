@@ -48,9 +48,9 @@ void programRun(unsigned long initTime) {
 
 }
 
-void runBlock(unsigned long millis(), int repeats, int duration, int recovery, int frequency, int pulse_width) {
+void runBlock(int repeats, int duration, int recovery, int frequency, int pulse_width) {
   for(int x = 0; x < repeats; x++) {
-    pulseTrain(millis(), duration);
+    pulseTrain(millis(), duration, frequency, pulse_width);
     delay(recovery);
   }
 }
