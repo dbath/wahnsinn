@@ -44,7 +44,8 @@ void programRun(unsigned long initTime) {
   
   //------------------------------------------------------------------------------------ENTER PROGRAM INFORMATION ABOVE THIS LINE-----------------------------------------------------------  
 
-
+  offSound();
+  digitalWrite(progPin, LOW);
 
 }
 
