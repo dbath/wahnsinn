@@ -16,25 +16,21 @@ BIN_SIZE =  20          # set bin size in seconds
 
 paramlist = ['rayEllipseOrienting (0 -> 1)',
             'following (0 -> 1)',
-            'wingExt (0)',
-            'isOcclusionTouched'
+            'wingExt (0)'
             ]
 
-CATEGORIZATION_THRESHOLD = [0.25,
-                            0.25,
-                            0.20,
+CATEGORIZATION_THRESHOLD = [0.5,
+                            0.5,
                             0.25
                             ]
 CATEGORY_NAME = ['Orienter',
                  'Follower',
-                 'Singer',
-                 'Toucher'
+                 'Singer'
                  ]    
 
 INDEX_NAME = ['Orienting Index',
               'Following Index',
-              'Wing Ext. Index',
-              'Touching Index'
+              'Wing Ext. Index'
               ]
            
 
@@ -72,7 +68,6 @@ matplotlib.rc('axes', color_cycle=colourlist)
 
 #GENERATE SUBPLOTS
 nrows = (len(paramlist) / 2) + (len(paramlist) > 0)
-print paramlist
 for k in paramlist:
     categorizing_bin = [blah for blah in qualityflyframe2.columns if k in blah]
     categorizing_bin = [blah for blah in categorizing_bin if ', bin 5' in blah]      #BIN NUMBER DEPENDS ON MATEBOOK SETTINGS. BOO.
@@ -85,14 +80,14 @@ for k in paramlist:
     stdaverages = grouped.std()
     naverages = grouped.count()
     naverages.to_csv('/groups/dickson/home/bathd/Desktop/OUTPUT/n_' + k + '.csv', sep=',')
-    naverages = naverages.drop(['Tester'], axis=1)
+    naverages = naverages.drop(['Tester', 'Arena'], axis=1)
     sqrtnaverages = np.sqrt(naverages)
     semaverages = np.divide(stdaverages, sqrtnaverages)
     
     for i in paramlist:
         cols = [col for col in averages.columns if i in col]
         cols = [col for col in cols if ', bin' in col]
-        x = (np.arange(len(averages[cols].columns)))*BIN_SIZE - (BIN_SIZE)/2
+        x = (np.arange(len(averages[cols].columns)))*BIN_SIZE + (BIN_SIZE)/2
         #ys = [averages.ix[j,cols] for j in averages.index]
         ys = averages[cols]   
         sems = semaverages[cols] 
@@ -101,7 +96,7 @@ for k in paramlist:
         for j in ys.index:
             p = plt.plot(x, ys.ix[j], linewidth=2, label=j, zorder=100)
             plt.fill_between(x, ys.ix[j] + sems.ix[j], ys.ix[j] - sems.ix[j], alpha=0.05, zorder=90)
-        ax.set_xlim((np.amin(x),np.amax(x)))
+        ax.set_xlim((np.amin(x),np.amax(x))) #np.amax(x)))
         ax.set_xlabel('Time (s), binned to '+ str(BIN_SIZE) + 's')
         ax.set_ylim(0,1.3*(ys.values.max()))
         ax.set_ylabel(INDEX_NAME[paramlist.index(i)])
@@ -128,14 +123,14 @@ for k in paramlist:
     stdaverages = grouped.std()
     naverages = grouped.count()
     #naverages.to_csv('/groups/dickson/home/bathd/Desktop/OUTPUT/n_' + k + '.csv', sep=',')
-    naverages = naverages.drop(['Tester'], axis=1)
+    naverages = naverages.drop(['Tester', 'Arena'], axis=1)
     sqrtnaverages = np.sqrt(naverages)
     semaverages = np.divide(stdaverages, sqrtnaverages)
     
     for i in paramlist:
         cols = [col for col in averages.columns if i in col]
         cols = [col for col in cols if ', bin' in col]
-        x = (np.arange(len(averages[cols].columns)))*BIN_SIZE - (BIN_SIZE)/2
+        x = (np.arange(len(averages[cols].columns)))*BIN_SIZE + (BIN_SIZE)/2
         #ys = [averages.ix[j,cols] for j in averages.index]
         ys = averages[cols]   
         sems = semaverages[cols] 
@@ -144,7 +139,7 @@ for k in paramlist:
         for j in ys.index:
             p = plt.plot(x, ys.ix[j], linewidth=2, label=j, zorder=100)
             plt.fill_between(x, ys.ix[j] + sems.ix[j], ys.ix[j] - sems.ix[j], alpha=0.05, zorder=90)
-        ax.set_xlim((np.amin(x),np.amax(x)))
+        ax.set_xlim((np.amin(x),np.amax(x))) #np.amax(x)))
         ax.set_xlabel('Time (s), binned to '+ str(BIN_SIZE) + 's')
         ax.set_ylim(0,1.3*(ys.values.max()))
         ax.set_ylabel(INDEX_NAME[paramlist.index(i)])
@@ -173,14 +168,14 @@ averages = grouped.mean()
 stdaverages = grouped.std()
 naverages = grouped.count()
 #naverages.to_csv('/groups/dickson/home/bathd/Desktop/OUTPUT/n_' + k + '.csv', sep=',')
-naverages = naverages.drop(['Tester'], axis=1)
+naverages = naverages.drop(['Tester', 'Arena'], axis=1)
 sqrtnaverages = np.sqrt(naverages)
 semaverages = np.divide(stdaverages, sqrtnaverages)
 
 for i in paramlist:
     cols = [col for col in averages.columns if i in col]
     cols = [col for col in cols if ', bin' in col]
-    x = (np.arange(len(averages[cols].columns)))*BIN_SIZE - (BIN_SIZE)/2
+    x = (np.arange(len(averages[cols].columns)))*BIN_SIZE + (BIN_SIZE)/2
     #ys = [averages.ix[j,cols] for j in averages.index]
     ys = averages[cols]   
     sems = semaverages[cols] 
@@ -189,7 +184,7 @@ for i in paramlist:
     for j in ys.index:
         p = plt.plot(x, ys.ix[j], linewidth=2, label=j, zorder=100)
         plt.fill_between(x, ys.ix[j] + sems.ix[j], ys.ix[j] - sems.ix[j], alpha=0.05, zorder=90)
-        ax.set_xlim((np.amin(x),np.amax(x)))
+        ax.set_xlim((np.amin(x),np.amax(x))) #np.amax(x)))
         ax.set_xlabel('Time (s), binned to '+ str(BIN_SIZE) + 's')
         ax.set_ylim(0,1.3*(ys.values.max()))
     ax.set_ylabel(INDEX_NAME[paramlist.index(i)])
@@ -205,14 +200,14 @@ averages = grouped.mean()
 stdaverages = grouped.std()
 naverages = grouped.count()
 #naverages.to_csv('/groups/dickson/home/bathd/Desktop/OUTPUT/n_' + k + '.csv', sep=',')
-naverages = naverages.drop(['Tester'], axis=1)
+naverages = naverages.drop(['Tester', 'Arena'], axis=1)
 sqrtnaverages = np.sqrt(naverages)
 semaverages = np.divide(stdaverages, sqrtnaverages)
 
 for i in paramlist:
     cols = [col for col in averages.columns if i in col]
     cols = [col for col in cols if ', bin' in col]
-    x = (np.arange(len(averages[cols].columns)))*BIN_SIZE - (BIN_SIZE)/2
+    x = (np.arange(len(averages[cols].columns)))*BIN_SIZE + (BIN_SIZE)/2
     #ys = [averages.ix[j,cols] for j in averages.index]
     ys = averages[cols]   
     sems = semaverages[cols] 
@@ -221,7 +216,7 @@ for i in paramlist:
     for j in ys.index:
         p = plt.plot(x, ys.ix[j], linewidth=2, label=j, zorder = 100)
         plt.fill_between(x, ys.ix[j] + sems.ix[j], ys.ix[j] - sems.ix[j], alpha=0.05, zorder=90)
-        ax.set_xlim((np.amin(x),np.amax(x)))
+        ax.set_xlim((np.amin(x),np.amax(x))) #np.amax(x)))
         ax.set_xlabel('Time (s), binned to '+ str(BIN_SIZE) + 's')
         ax.set_ylim(0,1.3*(ys.values.max()))
     ax.set_ylabel(INDEX_NAME[paramlist.index(i)])

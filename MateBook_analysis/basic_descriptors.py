@@ -21,16 +21,14 @@ paramlist = ['courtship',
             'courting (0)',
             'rayEllipseOrienting (0 -> 1)',
             'following (0 -> 1)',
-            'wingExt (0)',
-            'isOcclusionTouched',
+            'wingExt (0)'
             ]
 
 INDEX_NAME = ['Courtship Index',
               'Courting Index',
               'Orienting Index',
               'Following Index',
-              'Wing Ext. Index',
-              'Touching Index'
+              'Wing Ext. Index'
               ]
               
 colourlist = ['g', 'k', 'b', 'r', 'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed', 'DarkGreen', 'DarkBlue', 'CornflowerBlue']
