@@ -107,16 +107,18 @@ def find_files(directory, pattern):
                 filename = os.path.join(root, basename)
                 yield filename
 
-def parse_filename(filename):
-    vidname, flyID = filename.rsplit('/', 3)[-3:-1]
-    #vidname = vidname.rsplit('.', 2)[0]
+def parse_tempdf_name(filename):
+    print filename
+    vidname, flyID = filename.split('.mbr_')
+    vidname = vidname.split('.MTS')[0] + '.MTS'
+    #flyID = filename.split('.mbr_')[1]
     return vidname, flyID
 
-def parse_tempdf_name(path):
-    filename = path.split('/')[-1]
-    vidname = filename.split('_',3)[0]
-    vidname = vidname.rsplit('.',2)[0]
-    flyID = filename.split('_',3)[2]
+def parse_filename(path):
+    vidname = path.split('.mbd/')[1] 
+    vidname = vidname.rsplit('.mbr')[0] + '.mbr'
+    flyID = path.split('.mbr/')[1]
+    flyID = flyID.split('/track.tsv',1)[0]
     return vidname, flyID
 
     
@@ -139,6 +141,8 @@ def process_data(directory, paramlist):
         else:
             for j in paramlist:
                 tempdf[j[1]] = fi[j[0],j[1]]
+                if 'movedAbs_u' in j:
+                    tempdf[j[1]] = tempdf[j[1]] * FPS
         #tempdf.columns = [[vidname]*len(tempdf.columns),[flyID]*len(tempdf.columns),tempdf.columns]
         tempdf['Time'] = tempdf.index/FPS
         tempdf.to_pickle(JAR + tag + '_tempdf.pickle')
@@ -239,7 +243,7 @@ def plot_from_track(mean, sem, n):#, p_vals):
     fig.savefig(OUTPUT + 'behaviour_vs_time.svg', bbox_inches='tight')
 
 
-processed_filelist = glob.glob(OUTPUT + '*tempdf.pickle')
+processed_filelist = glob.glob(JAR + '*tempdf.pickle')
 total_filelist = glob.glob(_DROP + '*/*/track.tsv')
         
 if os.path.isfile(JAR+ 'mean.pickle') == True:
