@@ -13,9 +13,9 @@ from scipy import stats as st
 
 DROP = '/groups/dickson/home/bathd/Desktop/DROP/'   #Location of behavior.tsv and filenames.csv files
 
-CONTROL_GENOTYPE = 'DN_scr_16xTNT_'
+CONTROL_GENOTYPE = '+/UAS>>Kir2.1'
 
-CONTROL_TREATMENT = 'MF'
+CONTROL_TREATMENT = 'male'
 
 groupinglist = ['Tester',
                 'Target',
@@ -35,7 +35,7 @@ MMparamlist = ['courtship',
             'wingExt (1)'
             ]
             
-paramlist = MFparamlist
+paramlist = MMparamlist
 
 INDEX_NAME = ['Courtship Index',
               'Courting Index',

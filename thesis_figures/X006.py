@@ -1,5 +1,5 @@
 
-import os, fnmatch
+import os
 import numpy as np
 import pandas as pd
 from pandas import Series
@@ -13,35 +13,30 @@ from scipy import stats as st
 
 DROP = '/groups/dickson/home/bathd/Desktop/DROP/'   #Location of behavior.tsv and filenames.csv files
 
-CONTROL_GENOTYPE = 'DN_scr_16xTNT_'
+CONTROL_GENOTYPE = '+/UAS>>Kir2.1'
 
-CONTROL_TREATMENT = 'MF'
+CONTROL_TREATMENT = 'male'
 
 groupinglist = ['Tester',
                 'Target',
                 ]
 
-MFparamlist = ['courtship',
-            'courting (0)',
-            'rayEllipseOrienting (0 -> 1)',
-            'following (0 -> 1)',
-            'wingExt (0)'
+MFparamlist = ['circling (0 -> 1)',
+            'movedAbs average [mm/s] (0)',
+            'turnedAbs average [deg/s] (0)',
             ]
 
-MMparamlist = ['courtship',
-            'courting (1)',
-            'rayEllipseOrienting (1 -> 0)',
-            'following (1 -> 0)',
-            'wingExt (1)'
+MMparamlist = ['circling (1 -> 0)',
+            'movedAbs average [mm/s] (1)',
+            'turnedAbs average [deg/s] (1)'
+            
             ]
             
-paramlist = MFparamlist
+paramlist = MMparamlist
 
-INDEX_NAME = ['Courtship Index',
-              'Courting Index',
-              'Orienting Index',
-              'Following Index',
-              'Wing Ext. Index'
+INDEX_NAME = ['Circling Index',
+              'Average speed (mm/s)',
+              'Average turning speed (deg/s)',
               ]
               
 colourlist = ['k', 'g', 'b', 'r', 'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed', 'DarkGreen', 'DarkBlue', 'CornflowerBlue']
@@ -55,24 +50,8 @@ matplotlib.rcParams['axes.color_cycle'] = colourlist
 matplotlib.rc('axes', color_cycle=colourlist)
 
 
-def find_files(directory, pattern):
-    for root, dirs, files in os.walk(directory):
-        for basename in files:
-            if fnmatch.fnmatch(basename, pattern):
-                filename = os.path.join(root, basename)
-                yield filename
+rawfile = pd.read_table('/groups/dickson/home/bathd/Desktop/DROP/behavior.tsv', sep='\t', index_col='File' )    #READ FILE, indexed by filename """, index_col='File'"""
 
-rawfile = DataFrame()
-
-for filename in find_files(DROP, 'behavior.tsv'):
-    fi = pd.read_table(filename, sep='\t', index_col='File')
-    rawfile = pd.concat([rawfile, fi])
-    print 'Found Matebook Data:', filename
-
-
-"""
-rawfile = pd.read_table('/groups/dickson/home/bathd/Desktop/DROP/behavior.tsv', sep='\t', index_col='File' )    #READ FILE, indexed by filename , index_col='File'
-"""
 
 rawfile = rawfile[rawfile['quality'] > 0.8]    #REMOVE LOW QUALITY ARENAS
 print 'removed bad arenas'
@@ -116,9 +95,10 @@ for i in paramlist:
     sems = sem[i] 
     ns = n[i]
 
-    opacity = np.arange(0.5,1.0,(0.5/len(list_of_treatments)))
+    opacity = np.arange(0.5,1.0,(0.999/len(list_of_treatments)))
     index = np.arange(len(list_of_treatments))
     bar_width = 1.0/(len(list_of_genotypes))
+    print bar_width
     error_config = {'ecolor': '0.1'}
     
     ax = fig.add_subplot(len(paramlist), 1 , 1+paramlist.index(i))
@@ -126,7 +106,7 @@ for i in paramlist:
     p_vals_tr = []    
     for (j,k), l in grouped:
         bar_num = sorted(list_of_genotypes).index(j)
-        index_num = list(list_of_treatments).index(k)
+        index_num = sorted(list_of_treatments).index(k)
         
         p = plt.bar(0.1*(index_num+1)+index_num+(bar_width*bar_num), means[j,k], bar_width,
                     alpha=opacity[index_num],
@@ -155,7 +135,7 @@ for i in paramlist:
 
             
     
-    ax.set_ylim(0,1.3*(means.values.max()))
+    ax.set_ylim(0.7*(means.values.min()),1.3*(means.values.max()))
     ax.set_ylabel(INDEX_NAME[paramlist.index(i)] + ' ' + u"\u00B1" + ' SEM')   # +/- sign is u"\u00B1"
     ax.set_xticks(0.1*(index+1)+index+0.5) # (bar_width*(len(list_of_genotypes)/2)))
     ax.set_xticklabels(list(list_of_treatments))
@@ -168,7 +148,7 @@ for i in paramlist:
 
 
 plt.show()
-fig.savefig("/groups/dickson/home/bathd/Desktop/OUTPUT/grouped_means_sem_bar.svg", bbox_inches='tight')
+fig.savefig("/groups/dickson/home/bathd/Desktop/OUTPUT/locomotion_characteristics.svg", bbox_inches='tight')
         
 
 

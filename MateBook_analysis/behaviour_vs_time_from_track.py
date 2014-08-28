@@ -43,6 +43,7 @@ JAR = OUTPUT+ 'JAR/'
 _filefile = pd.read_csv(args.filedir+ 'Filenames.csv', sep=',')
 for x in _filefile.index:
     _filefile['Filename'][x] = _filefile['Filename'][x].rsplit('/',2)[-1]
+    _filefile['Filename'][x] = _filefile['Filename'][x].split('.MTS')[0] + '.MTS'
 _filefile.index = _filefile['Filename']
 _filefile.index.name = 'Video'
 
@@ -108,10 +109,10 @@ def find_files(directory, pattern):
                 yield filename
 
 def parse_tempdf_name(filename):
-    print filename
-    vidname, flyID = filename.split('.mbr_')
-    vidname = vidname.split('.MTS')[0] + '.MTS'
-    #flyID = filename.split('.mbr_')[1]
+    vidname = filename.split('.MTS')[0] + '.MTS'
+    vidname = vidname.rsplit('/',1)[-1]
+    flyID = filename.split('.mbr_')[1]
+    flyID = flyID.rsplit('_',1)[0]
     return vidname, flyID
 
 def parse_filename(path):
@@ -143,7 +144,6 @@ def process_data(directory, paramlist):
                 tempdf[j[1]] = fi[j[0],j[1]]
                 if 'movedAbs_u' in j:
                     tempdf[j[1]] = tempdf[j[1]] * FPS
-        #tempdf.columns = [[vidname]*len(tempdf.columns),[flyID]*len(tempdf.columns),tempdf.columns]
         tempdf['Time'] = tempdf.index/FPS
         tempdf.to_pickle(JAR + tag + '_tempdf.pickle')
         print ".....", tag, " processed to pickling."
@@ -161,6 +161,7 @@ def compile_data(files):
     vidlist = []
     flyIDlist = []
     for x in files:
+        print x
         tempdf = pd.read_pickle(x)
         dflist.append(tempdf)
         vidname, flyID = parse_tempdf_name(x)
@@ -175,7 +176,6 @@ def group_data(rawfile, filefile):
     print "merging with fly info..."
     for x in filefile.columns:
         rawfile[x] = filefile[x].reindex(rawfile.index, level=0)
-    #df = pd.merge(stretched_filefile, rawfile, left_index=True, right_index=True)
     df = rawfile
     df.to_csv(OUTPUT + 'df.csv', sep=',')
     print "grouping by genotype and condition..."
@@ -216,19 +216,18 @@ def plot_from_track(mean, sem, n):#, p_vals):
             bar_num = sorted(list_of_genotypes).index(j[0])
             index_num = list(list_of_treatments).index(j[1])
             x = list(means[j[0],j[1]].index)
-            #print "JKL:     ", j, k, l, bar_num, colourlist[bar_num]
-            #print list(means[j,k].index)
-            #print means.ix[j,k]
             print "adding: ", j[0], j[1], "to ", i, " plot."
             p = plt.plot(x, means.ix[j[0],j[1]], linewidth=2, zorder=100,
                         linestyle = LINE_STYLE_LIST[index_num],
                         color=colourlist[bar_num],
                         label=[j[0],j[1]]) 
-            q = plt.fill_between(x, means.ix[j[0],j[1]] + sems.ix[j[0],j[1]], means.ix[j[0],j[1]] - sems.ix[j[0],j[1]], 
-                        alpha=0.05, 
-                       zorder=90,
-                       color=colourlist[bar_num],
-                       )
+            q = plt.fill_between(x, 
+                                means.ix[j[0],j[1]] + sems.ix[j[0],j[1]], 
+                                means.ix[j[0],j[1]] - sems.ix[j[0],j[1]], 
+                                alpha=0.05, 
+                                zorder=90,
+                                color=colourlist[bar_num],
+                                )
         
         ax.set_xlim((np.amin(x),np.amax(x)))
         ax.set_ylim(0,1.3*(means.values.max()))
@@ -236,6 +235,7 @@ def plot_from_track(mean, sem, n):#, p_vals):
         ax.set_xlabel('Time (s)')
         ax.axvspan(STIM_ON, STIM_OFF,  facecolor='red', alpha=0.3, zorder=10)
         #ax.set_title(i)
+        ax.savefig(OUTPUT + i + '_vs_time.svg', bbox_inches='tight)
 
     l = pl.legend(bbox_to_anchor=(0, 0, 0.95, 0.95), bbox_transform=pl.gcf().transFigure)
 
