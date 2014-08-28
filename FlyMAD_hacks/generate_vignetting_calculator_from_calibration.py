@@ -25,15 +25,19 @@ from PIL import Image, ImageStat
 fname = sys.argv[1]
 fmf = FMF.FlyMovie(fname)
 newfmf = FMF.FlyMovieSaver(sys.argv[2])
+
+threshold = sys.argv[3] #  10
+size = sys.argv[4]  #  0.0003
+
 listy = []
 listynew = []
 times = []
 timesnew = []
 for frame_number in range(fmf.get_n_frames()):
     frame,timestamp = fmf.get_frame(frame_number)
-    zeros = float(frame[frame <= 10].size)
-    nonzeros = float(frame[frame >= 10].size)
-    if zeros/nonzeros <= 0.0003:
+    zeros = float(frame[frame <= threshold].size)
+    nonzeros = float(frame[frame >= threshold].size)
+    if zeros/nonzeros <= size:
         newfmf.add_frame(frame, timestamp)
         listynew.append(zeros/nonzeros)
         timesnew.append(frame_number)
@@ -41,6 +45,7 @@ for frame_number in range(fmf.get_n_frames()):
         pass
     listy.append(zeros/nonzeros)
     times.append(frame_number)
+    
 newfmf.close()
 
 plt.plot(times, listy, color='b')
