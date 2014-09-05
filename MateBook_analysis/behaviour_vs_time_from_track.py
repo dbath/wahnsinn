@@ -17,8 +17,8 @@ import argparse
 
 
 
-STIM_ON  =  0          # set time of stimulus on in seconds
-STIM_OFF =  1         #set time of stimulus off in seconds
+STIM_ON  =  120          # set time of stimulus on in seconds
+STIM_OFF =  180         #set time of stimulus off in seconds
 FPS =  25.0  
 
 
@@ -29,11 +29,17 @@ parser.add_argument('--outputdir', type=str, required=True,
                         help='directory to store analysis')
 parser.add_argument('--filedir', type=str, required=True,
                         help='directory of list of genotype information')
+parser.add_argument('--binsize', type=str, required=True,
+                        help='numerical value, size of bins in seconds')
+                       
+                        
 args = parser.parse_args()
 
 _DROP = args.inputdir
 
 OUTPUT = args.outputdir
+
+binsize = float(args.binsize)
 
 if not os.path.exists(OUTPUT+ 'JAR'):
     os.makedirs(OUTPUT+ 'JAR')
@@ -54,8 +60,7 @@ CONTROL_GENOTYPE = 'PooledControls'
 CONTROL_TREATMENT = ''
 
 groupinglist = ['Tester',
-                'Target',
-                'Time'
+                'Target'
                 ]
 
 MFparamlist = [['Unnamed: 3_level_0', 'courtship'],
@@ -167,42 +172,56 @@ def compile_data(files):
         vidname, flyID = parse_tempdf_name(x)
         vidlist.append(vidname)
         flyIDlist.append(flyID)
-    rawfile = pd.concat(dflist,  keys=zip(vidlist,flyIDlist), names=['Video','Arena'])
+    rawfile = pd.concat(dflist, keys=zip(vidlist,flyIDlist), names=['Video','Arena'])
     rawfile.to_csv(OUTPUT + 'rawfile.csv', sep=',')
     rawfile.to_pickle(JAR + 'rawfile.pickle')
     return rawfile
+
+def bin_data(df):
+    print "binning data to ", binsize, "s bins..."
+    bins = np.arange(int(df['Time'].min()),int(df['Time'].max()),binsize)
+    binned = df.groupby(groupinglist + ['Filename', 'Arena', pd.cut(df.Time, bins)])
+    #binned.to_csv(OUTPUT + 'df_'+ args.binsize, 's_bins.csv', sep=',')
+    return binned
 
 def group_data(rawfile, filefile):
     print "merging with fly info..."
     for x in filefile.columns:
         rawfile[x] = filefile[x].reindex(rawfile.index, level=0)
-    df = rawfile
-    df.to_csv(OUTPUT + 'df.csv', sep=',')
+    rawfile.to_pickle(JAR + 'df.pickle')
+    rawfile.to_csv(OUTPUT + 'df.csv', sep=',')
+    df = pd.read_csv(OUTPUT + 'df.csv', sep=',')  ###HACK danno.(include indices in column headers)
+    binned = bin_data(df)
     print "grouping by genotype and condition..."
-    grouped = df.groupby(groupinglist)
+    grouped = binned.mean().groupby(level=(range(len(groupinglist)) + [-1]))
     mean = grouped.mean()
     std = grouped.std()
     n = grouped.count()
     sem = grouped.aggregate(lambda x: st.sem(x, axis=None))
 
-    mean.to_csv(OUTPUT + 'mean.csv', sep=',')
-    n.to_csv(OUTPUT + 'n.csv', sep=',')
-    sem.to_csv(OUTPUT + 'sem.csv', sep=',')
+    mean.to_csv(OUTPUT + 'mean_' + args.binsize + '.csv', sep=',')
+    n.to_csv(OUTPUT + 'n_' + args.binsize + '.csv', sep=',')
+    sem.to_csv(OUTPUT + 'sem_' + args.binsize + '.csv', sep=',')
     
-    mean.to_pickle(JAR + 'mean.pickle')
-    n.to_pickle(JAR + 'n.pickle')
-    sem.to_pickle(JAR + 'sem.pickle')
+    mean.to_pickle(JAR + 'mean_' + args.binsize + '.pickle')
+    n.to_pickle(JAR + 'n_' + args.binsize + '.pickle')
+    sem.to_pickle(JAR + 'sem_' + args.binsize + '.pickle')
     
-    std.to_csv(OUTPUT + 'std.csv', sep=',')
+    std.to_csv(OUTPUT + 'std_' + args.binsize + '.csv', sep=',')
     return mean, sem, n
     
 
 def plot_from_track(mean, sem, n):#, p_vals):
     fig = plt.figure()
+    mean = mean.sort(columns = 'Time')
+    sem = sem.sort(columns = 'Time')
+    n = n.sort(columns = 'Time')
+    
     for i in params:
         means = mean[i]
         sems = sem[i]
         ns = n[i]
+        times = mean['Time']
         
         opacity = np.arange(0.5,1.0,(0.5/len(list_of_treatments)))
         index = np.arange(len(list_of_treatments))
@@ -215,15 +234,22 @@ def plot_from_track(mean, sem, n):#, p_vals):
         for j,k in means.groupby(level=[0,1]):
             bar_num = sorted(list_of_genotypes).index(j[0])
             index_num = list(list_of_treatments).index(j[1])
-            x = list(means[j[0],j[1]].index)
+            #x = list(times.ix[j[0],j[1]])
+            #x = list(means[j[0],j[1]].index)
+            x = list(times.ix[j[0]])
+            y = list(means.ix[j[0]])
+            psems = list(sems.ix[j[0]])
+            nsems = list(-1*(sems.ix[j[0]]))
+            top_errbar = tuple(map(sum, zip(psems, y)))
+            bottom_errbar = tuple(map(sum, zip(nsems, y)))
             print "adding: ", j[0], j[1], "to ", i, " plot."
-            p = plt.plot(x, means.ix[j[0],j[1]], linewidth=2, zorder=100,
+            p = plt.plot(x, y, linewidth=2, zorder=100,
                         linestyle = LINE_STYLE_LIST[index_num],
                         color=colourlist[bar_num],
                         label=[j[0],j[1]]) 
             q = plt.fill_between(x, 
-                                means.ix[j[0],j[1]] + sems.ix[j[0],j[1]], 
-                                means.ix[j[0],j[1]] - sems.ix[j[0],j[1]], 
+                                top_errbar, 
+                                bottom_errbar, 
                                 alpha=0.05, 
                                 zorder=90,
                                 color=colourlist[bar_num],
@@ -235,22 +261,22 @@ def plot_from_track(mean, sem, n):#, p_vals):
         ax.set_xlabel('Time (s)')
         ax.axvspan(STIM_ON, STIM_OFF,  facecolor='red', alpha=0.3, zorder=10)
         #ax.set_title(i)
-        ax.savefig(OUTPUT + i + '_vs_time.svg', bbox_inches='tight)
+        #ax.savefig(OUTPUT + i + '_vs_time.svg', bbox_inches='tight')
 
     l = pl.legend(bbox_to_anchor=(0, 0, 0.95, 0.95), bbox_transform=pl.gcf().transFigure)
 
     plt.show()
-    fig.savefig(OUTPUT + 'behaviour_vs_time.svg', bbox_inches='tight')
+    fig.savefig(OUTPUT + 'behaviour_vs_time_' + args.binsize + '.svg', bbox_inches='tight')
 
 
 processed_filelist = glob.glob(JAR + '*tempdf.pickle')
 total_filelist = glob.glob(_DROP + '*/*/track.tsv')
-        
-if os.path.isfile(JAR+ 'mean.pickle') == True:
+
+if os.path.isfile(JAR + 'mean_' + args.binsize + '.pickle') == True:
     print "Using pickled grouped data."
-    mean =  pd.read_pickle(JAR+ 'mean.pickle')
-    sem = pd.read_pickle(JAR+ 'sem.pickle')
-    n = pd.read_pickle(JAR+ 'n.pickle')
+    mean =  pd.read_pickle(JAR+ 'mean_' + args.binsize + '.pickle')
+    sem = pd.read_pickle(JAR+ 'sem_' + args.binsize + '.pickle')
+    n = pd.read_pickle(JAR+ 'n_' + args.binsize + '.pickle')
     rawfile = retrieve_data(JAR + 'rawfile.pickle')
 elif os.path.isfile(JAR+ 'rawfile.pickle') == True:
     print "Using pickled rawfile."
