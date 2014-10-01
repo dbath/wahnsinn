@@ -17,8 +17,7 @@ import argparse
 
 
 
-STIM_ON  =  120          # set time of stimulus on in seconds
-STIM_OFF =  180         #set time of stimulus off in seconds
+STIM_LIST = [[120,180],[360,420]]
 FPS =  25.0  
 
 
@@ -49,13 +48,17 @@ JAR = OUTPUT+ 'JAR/'
 _filefile = pd.read_csv(args.filedir+ 'Filenames.csv', sep=',')
 for x in _filefile.index:
     _filefile['Filename'][x] = _filefile['Filename'][x].rsplit('/',2)[-1]
-    _filefile['Filename'][x] = _filefile['Filename'][x].split('.MTS')[0] + '.MTS'
+    if '.MTS' in _filefile['Filename'][x]:
+        _filefile['Filename'][x] = _filefile['Filename'][x].split('.MTS')[0] + '.MTS'
+    if '.avi' in _filefile['Filename'][x]:
+        _filefile['Filename'][x] = _filefile['Filename'][x].split('.avi')[0] + '.avi'
+    
 _filefile.index = _filefile['Filename']
 _filefile.index.name = 'Video'
 
 
 
-CONTROL_GENOTYPE = 'PooledControls'
+CONTROL_GENOTYPE = 'uas-Chrimson/+'
 
 CONTROL_TREATMENT = ''
 
@@ -95,8 +98,10 @@ INDEX_NAME = ['Courtship Index',
               'Speed (mm/s)'
               ]
               
-colourlist = ['k', 'DarkGreen', 'g','DarkBlue', 'b', 'r', 'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed',   'CornflowerBlue']
+#colourlist = ['k','b', 'r', 'c', 'm', 'y','g', 'DarkGreen', 'DarkBlue', 'Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed',   'CornflowerBlue']
 #colourlist = ['#000000','#0000FF', '#FF0000',  '#8EC8FF', '#999999' ,'#FF9966']
+colourlist = ['#000000','#008000','#0032FF','r','c','m','y']
+
 
 LINE_STYLE_LIST = ['-', '--', '-.', ':']
 
@@ -114,7 +119,10 @@ def find_files(directory, pattern):
                 yield filename
 
 def parse_tempdf_name(filename):
-    vidname = filename.split('.MTS')[0] + '.MTS'
+    if '.avi' in filename:
+        vidname = filename.split('.avi')[0] + '.avi'
+    if '.MTS' in filename:
+        vidname = filename.split('.MTS')[0] + '.MTS'
     vidname = vidname.rsplit('/',1)[-1]
     flyID = filename.split('.mbr_')[1]
     flyID = flyID.rsplit('_',1)[0]
@@ -259,16 +267,58 @@ def plot_from_track(mean, sem, n):#, p_vals):
         ax.set_ylim(0,1.3*(means.values.max()))
         ax.set_ylabel(INDEX_NAME[params.index(i)] + ' ' + u"\u00B1" + ' SEM')   # +/- sign is u"\u00B1"
         ax.set_xlabel('Time (s)')
-        ax.axvspan(STIM_ON, STIM_OFF,  facecolor='red', alpha=0.3, zorder=10)
+        for ons, offs in STIM_LIST:
+            ax.axvspan(ons, offs,  facecolor='red', alpha=0.3, zorder=10)
         #ax.set_title(i)
         #ax.savefig(OUTPUT + i + '_vs_time.svg', bbox_inches='tight')
 
-    l = pl.legend(bbox_to_anchor=(0, 0, 0.95, 0.95), bbox_transform=pl.gcf().transFigure)
+    l = pl.legend(bbox_to_anchor=(0, 0, 1, 1), bbox_transform=pl.gcf().transFigure)
 
     plt.show()
     fig.savefig(OUTPUT + 'behaviour_vs_time_' + args.binsize + '.svg', bbox_inches='tight')
 
-
+def plot_bar_from_track(mean, sem, n):#, p_vals):
+    fig = plt.figure()
+    mean = mean.sort(columns = 'Time')
+    sem = sem.sort(columns = 'Time')
+    n = n.sort(columns = 'Time')
+    
+    for i in params:
+        means = mean[i]
+        sems = sem[i]
+        ns = n[i]
+        times = mean['Time']
+        
+        opacity = np.arange(0.5,1.0,(0.5/len(list_of_treatments)))
+        index = np.arange(len(list_of_treatments))
+        bar_width = 1.0/(len(list_of_genotypes))
+        error_config = {'ecolor': '0.1'}
+        
+        p_vals_gt = []
+        p_vals_tr = [] 
+        
+        ax = fig.add_subplot(len(params), 1 , 1+params.index(i))
+        
+        for j,k in means.groupby(level=[0,1]):
+            bar_num = sorted(list_of_genotypes).index(j[0])
+            index_num = list(list_of_treatments).index(j[1])    
+                
+            #x = list(times.ix[j[0]])
+            #y = list(means.ix[j[0]].mean())
+            #psems = list(sems.ix[j[0]].mean())
+            #nsems = list(-1*(sems.ix[j[0]].mean()))
+            #top_errbar = tuple(map(sum, zip(psems, y)))
+            #bottom_errbar = tuple(map(sum, zip(nsems, y)))    
+                
+            p = plt.bar(0.1*(index_num+1)+index_num+(bar_width*bar_num), means.ix[j[0]].mean(), bar_width,
+                    alpha=opacity[index_num],
+                    color=colourlist[bar_num],
+                    yerr=sems.ix[j[0]].mean(),
+                    error_kw=error_config,
+                    label=[j[0],j[1]])  
+        
+        
+        
 processed_filelist = glob.glob(JAR + '*tempdf.pickle')
 total_filelist = glob.glob(_DROP + '*/*/track.tsv')
 

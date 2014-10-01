@@ -1,5 +1,5 @@
 
-import os
+import os, fnmatch
 import numpy as np
 import pandas as pd
 from pandas import Series
@@ -13,11 +13,11 @@ from scipy import stats as st
 
 DROP = '/groups/dickson/home/bathd/Desktop/DROP/'   #Location of behavior.tsv and filenames.csv files
 
-CONTROL_GENOTYPE = '+/UAS>>Kir2.1'
+CONTROL_GENOTYPE = 'Canton S'
 
-CONTROL_TREATMENT = 'mated female'
+CONTROL_TREATMENT = 'virgin female'
 
-groupinglist = ['Genotype',
+groupinglist = ['Tester',
                 'Target',
                 ]
 
@@ -25,7 +25,8 @@ MFparamlist = ['courtship',
             'courting (0)',
             'rayEllipseOrienting (0 -> 1)',
             'following (0 -> 1)',
-            'wingExt (0)'
+            'wingExt (0)',
+            'copulation',
             ]
 
 MMparamlist = ['courtship',
@@ -41,7 +42,8 @@ INDEX_NAME = ['Courtship Index',
               'Courting Index',
               'Orienting Index',
               'Following Index',
-              'Wing Ext. Index'
+              'Wing Ext. Index',
+              'Proportion Copulating'
               ]
               
 colourlist = ['k', 'g', 'b', 'r', 'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed', 'DarkGreen', 'DarkBlue', 'CornflowerBlue']
@@ -55,8 +57,24 @@ matplotlib.rcParams['axes.color_cycle'] = colourlist
 matplotlib.rc('axes', color_cycle=colourlist)
 
 
-rawfile = pd.read_table('/groups/dickson/home/bathd/Desktop/DROP/behavior.tsv', sep='\t', index_col='File' )    #READ FILE, indexed by filename """, index_col='File'"""
+def find_files(directory, pattern):
+    for root, dirs, files in os.walk(directory):
+        for basename in files:
+            if fnmatch.fnmatch(basename, pattern):
+                filename = os.path.join(root, basename)
+                yield filename
 
+rawfile = DataFrame()
+
+for filename in find_files(DROP, 'behavior.tsv'):
+    fi = pd.read_table(filename, sep='\t', index_col='File')
+    rawfile = pd.concat([rawfile, fi])
+    print 'Found Matebook Data:', filename
+
+
+"""
+rawfile = pd.read_table('/groups/dickson/home/bathd/Desktop/DROP/behavior.tsv', sep='\t', index_col='File' )    #READ FILE, indexed by filename , index_col='File'
+"""
 
 rawfile = rawfile[rawfile['quality'] > 0.8]    #REMOVE LOW QUALITY ARENAS
 print 'removed bad arenas'
@@ -100,10 +118,9 @@ for i in paramlist:
     sems = sem[i] 
     ns = n[i]
 
-    opacity = np.arange(0.5,1.0,(0.999/len(list_of_treatments)))
+    opacity = np.arange(0.5,1.0,(0.5/len(list_of_treatments)))
     index = np.arange(len(list_of_treatments))
     bar_width = 1.0/(len(list_of_genotypes))
-    print bar_width
     error_config = {'ecolor': '0.1'}
     
     ax = fig.add_subplot(len(paramlist), 1 , 1+paramlist.index(i))
@@ -111,7 +128,7 @@ for i in paramlist:
     p_vals_tr = []    
     for (j,k), l in grouped:
         bar_num = sorted(list_of_genotypes).index(j)
-        index_num = sorted(list_of_treatments).index(k)
+        index_num = list(list_of_treatments).index(k)
         
         p = plt.bar(0.1*(index_num+1)+index_num+(bar_width*bar_num), means[j,k], bar_width,
                     alpha=opacity[index_num],
@@ -142,9 +159,9 @@ for i in paramlist:
     
     ax.set_ylim(0,1.3*(means.values.max()))
     ax.set_ylabel(INDEX_NAME[paramlist.index(i)] + ' ' + u"\u00B1" + ' SEM')   # +/- sign is u"\u00B1"
-    ax.set_xticks(0.1*(index+1)+index+(bar_width*(len(list_of_genotypes)/2)))
+    ax.set_xticks(0.1*(index+1)+index+0.5) # (bar_width*(len(list_of_genotypes)/2)))
     ax.set_xticklabels(list(list_of_treatments))
-    ax.set_xlabel('Target')
+    ax.set_xlabel(groupinglist[1])
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.yaxis.set_ticks_position('left')

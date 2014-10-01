@@ -11,14 +11,19 @@ import pylab as pl
 from scipy import stats as st
 
 
+
+STIM_ON  =  120          # set time of stimulus on in seconds
+STIM_OFF =  180         #set time of stimulus off in seconds
+BIN_SIZE =  10          # set bin size in seconds
+
 DROP = '/groups/dickson/home/bathd/Desktop/DROP/'   #Location of behavior.tsv and filenames.csv files
 
-CONTROL_GENOTYPE = 'pIP10'
+CONTROL_GENOTYPE = '+/UAS-CsChrimson'
 
-CONTROL_TREATMENT = 'w- male'
+CONTROL_TREATMENT = '0.5Hz'
 
-groupinglist = ['Tester',
-                'Target',
+groupinglist = ['Genotype',
+                'Stimulus Frequency',
                 ]
 
 MFparamlist = ['courtship',
@@ -35,7 +40,7 @@ MMparamlist = ['courtship',
             'wingExt (1)'
             ]
             
-paramlist = MMparamlist
+paramlist = MFparamlist
 
 INDEX_NAME = ['Courtship Index',
               'Courting Index',
@@ -44,10 +49,8 @@ INDEX_NAME = ['Courtship Index',
               'Wing Ext. Index'
               ]
               
-colourlist = ['k', 'g', 'b', 'r', 'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed', 'DarkGreen', 'DarkBlue', 'CornflowerBlue', 'k', 'g', 'b', 'r', 'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed', 'DarkGreen', 'DarkBlue', 'CornflowerBlue']
+colourlist = ['k','r','Orange', 'b', 'g', 'DarkGreen', 'g','DarkBlue', 'b', 'r', 'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed',   'CornflowerBlue']
 #colourlist = ['#000000','#0000FF', '#FF0000',  '#8EC8FF', '#999999' ,'#FF9966']
-
-#colourlist=['Gray', 'g', 'k','purple' ]
 
 LINE_STYLE_LIST = ['-', '--', '-.', ':']
 
@@ -56,7 +59,14 @@ LINE_STYLE_LIST = ['-', '--', '-.', ':']
 matplotlib.rcParams['axes.color_cycle'] = colourlist
 matplotlib.rc('axes', color_cycle=colourlist)
 
-
+def set_column_sequence(dataframe, seq):
+    '''Takes a dataframe and a subsequence of its columns, returns dataframe with seq as first columns'''
+    cols = seq[:] # copy so we don't mutate seq
+    for x in dataframe.columns:
+        if x not in cols:
+            cols.append(x)
+    return dataframe[cols]
+    
 def find_files(directory, pattern):
     for root, dirs, files in os.walk(directory):
         for basename in files:
@@ -69,12 +79,9 @@ rawfile = DataFrame()
 for filename in find_files(DROP, 'behavior.tsv'):
     fi = pd.read_table(filename, sep='\t', index_col='File')
     rawfile = pd.concat([rawfile, fi])
+    rawfile = set_column_sequence(rawfile, fi.columns)
     print 'Found Matebook Data:', filename
 
-
-"""
-rawfile = pd.read_table('/groups/dickson/home/bathd/Desktop/DROP/behavior.tsv', sep='\t', index_col='File' )    #READ FILE, indexed by filename , index_col='File'
-"""
 
 rawfile = rawfile[rawfile['quality'] > 0.8]    #REMOVE LOW QUALITY ARENAS
 print 'removed bad arenas'
@@ -94,7 +101,6 @@ mean = grouped.mean()
 std = grouped.std()
 n = grouped.count()
 sem = grouped.aggregate(lambda x: st.sem(x, axis=None))
-#sem = grouped.aggregate(lambda x: np.std(x, axis=1)/np.sqrt(x.count()))
 
 mean.to_csv('/groups/dickson/home/bathd/Desktop/OUTPUT/mean.csv', sep=',')
 n.to_csv('/groups/dickson/home/bathd/Desktop/OUTPUT/n.csv', sep=',')
@@ -110,67 +116,45 @@ list_of_genotypes = set(df[groupinglist[0]][df[groupinglist[0]].notnull()])
 
 
 fig = plt.figure()
-fig.set_size_inches(3,18)
 
 for i in paramlist:
-
-    means = mean[i] 
-    sems = sem[i] 
-    ns = n[i]
-
-    opacity =  np.arange(0.5,1.0,(0.5/len(list_of_treatments)))
+    cols = [col for col in mean.columns if i in col]
+    cols = [col for col in cols if ', bin' in col]
+    x = (np.arange(len(mean[cols].columns)))*BIN_SIZE + (BIN_SIZE)/2
+    means = mean[cols]   
+    sems = sem[cols] 
+    ns = n[cols]
+    opacity = np.arange(0.5,1.0,(0.5/len(list_of_treatments)))
     index = np.arange(len(list_of_treatments))
     bar_width = 1.0/(len(list_of_genotypes))
     error_config = {'ecolor': '0.1'}
-    
+    #print "MAX: ", i, "--- \t",  np.amax(means)
     ax = fig.add_subplot(len(paramlist), 1 , 1+paramlist.index(i))
-    p_vals_gt = []
-    p_vals_tr = []    
+    
     for (j,k), l in grouped:
         bar_num = sorted(list_of_genotypes).index(j)
         index_num = list(list_of_treatments).index(k)
-        
-        p = plt.bar(0.1*(index_num+1)+index_num+(bar_width*bar_num), means[j,k], bar_width,
-                    alpha=1.0, #opacity[index_num],
+        p = plt.plot(x, means.ix[j,k], linewidth=2, zorder=100,
+                    linestyle = LINE_STYLE_LIST[index_num],
                     color=colourlist[bar_num],
-                    yerr=sems[j,k],
-                    error_kw=error_config,
-                    label=[j,k])  
-        #Mann-Whitney test = st.ranksums
-        
-        z_stat_gt, p_val_gt = st.ranksums(df[(df[groupinglist[0]] == j) & (df[groupinglist[1]] == k)][i], 
-                                        df[(df[groupinglist[0]] == CONTROL_GENOTYPE) & (df[groupinglist[1]] == k)][i]) 
-        z_stat_tr, p_val_tr = st.ranksums(df[(df[groupinglist[0]] == j) & (df[groupinglist[1]] == k)][i], 
-                                        df[(df[groupinglist[0]] == j) & (df[groupinglist[1]] == CONTROL_TREATMENT)][i]) 
-
-        p_vals_gt_rounded = [ '%.4f' % elem for elem in p_vals_gt]
-        p_vals_tr_rounded = [ '%.4f' % elem for elem in p_vals_tr]
-        
-        q = plt.text(0.1*(index_num+1)+index_num+(bar_width*(bar_num + 0.5)), #centre of bar
-                    means[j,k]+ 0.5*sems[j,k] + 0.1*means.values.max(), #just above error bar
-                    'p(genotype) = '+ str(p_val_gt.round(4)) + 
-                    '\np(treatment) = ' + str(p_val_tr.round(4)) + 
-                    '\nn = ' + str(ns[j,k]),
-                    size=10,
-                    ha='center',
+                    label=[j,k]) 
+        q = plt.fill_between(x, means.ix[j,k] + sems.ix[j,k], means.ix[j,k] - sems.ix[j,k], 
+                    alpha=0.05, 
+                    zorder=90,
+                    color=colourlist[bar_num]
                     )
-
-            
     
-    ax.set_ylim(0,1.3*(means.values.max()))
+    ax.set_xlim((np.amin(x),np.amax(x)))
+    ax.set_ylim(0,0.5)#1.3*(means.values.max()))
     ax.set_ylabel(INDEX_NAME[paramlist.index(i)] + ' ' + u"\u00B1" + ' SEM')   # +/- sign is u"\u00B1"
-    ax.set_xticks(0.1*(index+1)+index+0.5) # (bar_width*(len(list_of_genotypes)/2)))
-    ax.set_xticklabels(list(list_of_treatments))
-    ax.set_xlabel(groupinglist[1])
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-    ax.yaxis.set_ticks_position('left')
-    ax.xaxis.set_ticks_position('bottom')
-    ax.legend(loc='upper right', shadow=False, fontsize=6)
+    ax.set_xlabel('Time (s), binned to '+ str(BIN_SIZE) + 's')
+    ax.axvspan(STIM_ON, STIM_OFF,  facecolor='red', alpha=0.3, zorder=10)
+    #ax.set_title(i)
 
+l = pl.legend(bbox_to_anchor=(0, 0, 0.95, 0.95), bbox_transform=pl.gcf().transFigure)
 
 plt.show()
-fig.savefig("/groups/dickson/home/bathd/Desktop/OUTPUT/grouped_means_sem_bar.svg", bbox_inches='tight')
+fig.savefig("/groups/dickson/home/bathd/Desktop/OUTPUT/behaviour_vs_time.svg", bbox_inches='tight')
         
 
 

@@ -12,32 +12,32 @@ import pylab as pl
 
 DROP = '/groups/dickson/home/bathd/Desktop/DROP/'   #Location of behavior.tsv and filenames.csv files
 
-
-paramlist = ['courtship',
-            'courting (1)',
-            'rayEllipseOrienting (1 -> 0)',
-            'following (1 -> 0)',
-            'wingExt (1)'
-            ]
+FPS = 25.0
             
 MFparamlist = ['courtship',
             'courting (0)',
             'rayEllipseOrienting (0 -> 1)',
             'following (0 -> 1)',
-            'wingExt (0)'
+            'wingExt (0)',
+            'movedAbs average [mm/s] (0)'
             ]
 
 MMparamlist = ['courtship',
             'courting (1)',
             'rayEllipseOrienting (1 -> 0)',
             'following (1 -> 0)',
-            'wingExt (1)'
+            'wingExt (1)',
+            'movedAbs average [mm/s] (1)'
             ]
+            
+paramlist = MMparamlist 
+
 INDEX_NAME = ['Courtship Index',
               'Courting Index',
               'Orienting Index',
               'Following Index',
-              'Wing Ext. Index'
+              'Wing Ext. Index',
+              'Speed (mm/s)'
               ]
               
 colourlist = ['k', 'g', 'b', 'r', 'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed', 'DarkGreen', 'DarkBlue', 'CornflowerBlue']
@@ -96,11 +96,13 @@ for i in paramlist:
     ys = averages[i]   
     sems = semaverages[i] 
     n = naverages[i]
+    if 'movedAbs' in i:
+        ys = ys * FPS
+        sems = sems * FPS
     index = np.arange(len(ys)) #+ 0.2
     bar_width = .8
     opacity = 0.8
     error_config = {'ecolor': '0.1'}
-
     
     ax = fig.add_subplot(len(paramlist), 1 , 1+paramlist.index(i))
     #ax.set_color_cycle(colourlist)

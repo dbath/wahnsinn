@@ -1,5 +1,5 @@
 
-import os
+import os, fnmatch
 import numpy as np
 import pandas as pd
 from pandas import Series
@@ -15,37 +15,40 @@ DROP = '/groups/dickson/home/bathd/Desktop/DROP/'   #Location of behavior.tsv an
 
 CONTROL_GENOTYPE = '+/UAS>>Kir2.1'
 
-CONTROL_TREATMENT = 'oe+'
+
+CONTROL_TREATMENT = 'MM'
 
 groupinglist = ['Tester',
                 'Target',
                 ]
 
-MFparamlist = ['courtship',
-            'courting (0)',
-            'rayEllipseOrienting (0 -> 1)',
-            'following (0 -> 1)',
+MFparamlist = ['wingExtTowards (0 -> 1)',
+            'wingExtAway (0 -> 1)',
+            'wingExtBoth (0)',
+            'wingExtEitherOr (0)',
             'wingExt (0)'
             ]
 
-MMparamlist = ['courtship',
-            'courting (1)',
-            'rayEllipseOrienting (1 -> 0)',
-            'following (1 -> 0)',
+MMparamlist = ['wingExtTowards (1 -> 0)',
+            'wingExtAway (0 -> 1)',
+            'wingExtBoth (1)',
+            'wingExtEitherOr (1)',
             'wingExt (1)'
             ]
             
-paramlist = MFparamlist
+paramlist = MMparamlist
 
-INDEX_NAME = ['Courtship Index',
-              'Courting Index',
-              'Orienting Index',
-              'Following Index',
+INDEX_NAME = ['Wing Ext. Towards Index',
+              'Wing Ext. Away Index',
+              'Simultaneous Wing Ext. Index',
+              'Single Wing Ext. Index',
               'Wing Ext. Index'
               ]
               
-colourlist = ['k', 'g', 'b', 'r', 'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed', 'DarkGreen', 'DarkBlue', 'CornflowerBlue']
-#colourlist = ['#000000','#0000FF', '#FF0000',  '#8EC8FF', '#999999' ,'#FF9966']
+#colourlist = ['k', 'g', 'b', 'r', 'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed', 'DarkGreen', 'DarkBlue', 'CornflowerBlue', 'k', 'g', 'b', 'r', 'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed', 'DarkGreen', 'DarkBlue', 'CornflowerBlue']
+colourlist = ['#000000','#008000','#0032FF', '#FF0000',  '#8EC8FF', '#999999' ,'#FF9966']
+
+#colourlist=['Gray', 'g', 'k','purple' ]
 
 LINE_STYLE_LIST = ['-', '--', '-.', ':']
 
@@ -55,8 +58,24 @@ matplotlib.rcParams['axes.color_cycle'] = colourlist
 matplotlib.rc('axes', color_cycle=colourlist)
 
 
-rawfile = pd.read_table('/groups/dickson/home/bathd/Desktop/DROP/behavior.tsv', sep='\t', index_col='File' )    #READ FILE, indexed by filename """, index_col='File'"""
+def find_files(directory, pattern):
+    for root, dirs, files in os.walk(directory):
+        for basename in files:
+            if fnmatch.fnmatch(basename, pattern):
+                filename = os.path.join(root, basename)
+                yield filename
 
+rawfile = DataFrame()
+
+for filename in find_files(DROP, 'behavior.tsv'):
+    fi = pd.read_table(filename, sep='\t', index_col='File')
+    rawfile = pd.concat([rawfile, fi])
+    print 'Found Matebook Data:', filename
+
+
+"""
+rawfile = pd.read_table('/groups/dickson/home/bathd/Desktop/DROP/behavior.tsv', sep='\t', index_col='File' )    #READ FILE, indexed by filename , index_col='File'
+"""
 
 rawfile = rawfile[rawfile['quality'] > 0.8]    #REMOVE LOW QUALITY ARENAS
 print 'removed bad arenas'
@@ -87,12 +106,12 @@ std.to_csv('/groups/dickson/home/bathd/Desktop/OUTPUT/std.csv', sep=',')
 list_of_treatments = set((df[groupinglist[1]][df[groupinglist[1]].notnull()]))
 list_of_genotypes = set(df[groupinglist[0]][df[groupinglist[0]].notnull()])
 
+
 # GENERATE PLOTS  #
 
 
 fig = plt.figure()
 fig.set_size_inches(3,18)
-
 
 for i in paramlist:
 
@@ -100,9 +119,9 @@ for i in paramlist:
     sems = sem[i] 
     ns = n[i]
 
-    opacity = np.arange(0.5,1.0,(0.999/len(list_of_treatments)))
+    opacity =  np.arange(0.5,1.0,(0.5/len(list_of_treatments)))
     index = np.arange(len(list_of_treatments))
-    bar_width = 1.0/(len(list_of_treatments) + 1.0)
+    bar_width = 1.0/(len(list_of_genotypes))
     error_config = {'ecolor': '0.1'}
     
     ax = fig.add_subplot(len(paramlist), 1 , 1+paramlist.index(i))
@@ -110,12 +129,10 @@ for i in paramlist:
     p_vals_tr = []    
     for (j,k), l in grouped:
         bar_num = sorted(list_of_genotypes).index(j)
-        index_num = sorted(list_of_treatments).index(k)
-        print index_num, "INDEX_NUM"
-        print bar_num, "BAR_NUM"
+        index_num = list(list_of_treatments).index(k)
         
-        p = plt.bar(index_num+(bar_width*bar_num), means[j,k], bar_width,
-                    alpha=opacity[index_num],
+        p = plt.bar(0.1*(index_num+1)+index_num+(bar_width*bar_num), means[j,k], bar_width,
+                    alpha=1.0, #opacity[index_num],
                     color=colourlist[bar_num],
                     yerr=sems[j,k],
                     error_kw=error_config,
@@ -130,7 +147,7 @@ for i in paramlist:
         p_vals_gt_rounded = [ '%.4f' % elem for elem in p_vals_gt]
         p_vals_tr_rounded = [ '%.4f' % elem for elem in p_vals_tr]
         
-        q = plt.text(index_num+(bar_width*(bar_num + 0.5)), #centre of bar
+        q = plt.text(0.1*(index_num+1)+index_num+(bar_width*(bar_num + 0.5)), #centre of bar
                     means[j,k]+ 0.5*sems[j,k] + 0.1*means.values.max(), #just above error bar
                     'p(genotype) = '+ str(p_val_gt.round(4)) + 
                     '\np(treatment) = ' + str(p_val_tr.round(4)) + 
@@ -143,9 +160,9 @@ for i in paramlist:
     
     ax.set_ylim(0,1.3*(means.values.max()))
     ax.set_ylabel(INDEX_NAME[paramlist.index(i)] + ' ' + u"\u00B1" + ' SEM')   # +/- sign is u"\u00B1"
-    ax.set_xticks(index+(bar_width*(len(list_of_genotypes)/2)))
+    ax.set_xticks(0.1*(index+1)+index+0.5) # (bar_width*(len(list_of_genotypes)/2)))
     ax.set_xticklabels(list(list_of_treatments))
-    ax.set_xlabel('Target')
+    ax.set_xlabel(groupinglist[1])
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.yaxis.set_ticks_position('left')
