@@ -45,6 +45,7 @@ if not os.path.exists(OUTPUT+ 'JAR'):
 
 JAR = OUTPUT+ 'JAR/'
 
+print args.filedir + 'Filenames.csv'
 _filefile = pd.read_csv(args.filedir+ 'Filenames.csv', sep=',')
 for x in _filefile.index:
     _filefile['Filename'][x] = _filefile['Filename'][x].rsplit('/',2)[-1]
@@ -67,7 +68,6 @@ groupinglist = ['Tester',
                 ]
 
 MFparamlist = [['Unnamed: 3_level_0', 'courtship'],
-            ['0', 'courting'],
             ['0 1','rayEllipseOrienting'],
             ['0 1', 'following'],
             ['0', 'wingExt'],
@@ -76,7 +76,6 @@ MFparamlist = [['Unnamed: 3_level_0', 'courtship'],
             ]
 
 MMparamlist = [['Unnamed: 3_level_0', 'courtship'],
-            ['1', 'courting'],
             ['1 0','rayEllipseOrienting'],
             ['1 0', 'following'],
             ['1', 'wingExt'],
@@ -90,7 +89,6 @@ for a,b in _paramlist:
     params.append(b)
 
 INDEX_NAME = ['Courtship Index',
-              'Courting Index',
               'Orienting Index',
               'Following Index',
               'Wing Ext. Index',
@@ -98,9 +96,9 @@ INDEX_NAME = ['Courtship Index',
               'Speed (mm/s)'
               ]
               
-#colourlist = ['k','b', 'r', 'c', 'm', 'y','g', 'DarkGreen', 'DarkBlue', 'Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed',   'CornflowerBlue']
+colourlist = ['k','b', 'r', 'c', 'm', 'y','g', 'DarkGreen', 'DarkBlue', 'Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed',   'CornflowerBlue']
 #colourlist = ['#000000','#0000FF', '#FF0000',  '#8EC8FF', '#999999' ,'#FF9966']
-colourlist = ['#000000','#008000','#0032FF','r','c','m','y']
+#colourlist = ['#008000','#0032FF','#000000','r','c','m','y']
 
 
 LINE_STYLE_LIST = ['-', '--', '-.', ':']
@@ -129,7 +127,7 @@ def parse_tempdf_name(filename):
     return vidname, flyID
 
 def parse_filename(path):
-    vidname = path.split('.mbd/')[1] 
+    vidname = path.split('.mbd/')[-1] 
     vidname = vidname.rsplit('.mbr')[0] + '.mbr'
     flyID = path.split('.mbr/')[1]
     flyID = flyID.split('/track.tsv',1)[0]
@@ -250,7 +248,7 @@ def plot_from_track(mean, sem, n):#, p_vals):
             nsems = list(-1*(sems.ix[j[0]]))
             top_errbar = tuple(map(sum, zip(psems, y)))
             bottom_errbar = tuple(map(sum, zip(nsems, y)))
-            print "adding: ", j[0], j[1], "to ", i, " plot."
+            print "adding: ", j[0], j[1], "to ", i, " plot.", bar_num
             p = plt.plot(x, y, linewidth=2, zorder=100,
                         linestyle = LINE_STYLE_LIST[index_num],
                         color=colourlist[bar_num],
@@ -337,6 +335,7 @@ elif (len(processed_filelist) < 1):
     process_data(_DROP, _paramlist)
     rawfile = compile_data(glob.glob(JAR + '*tempdf.pickle'))
     mean, sem, n = group_data(rawfile, _filefile)
+
 else: 
     print "Using pickled tempdf files."    
     rawfile = compile_data(processed_filelist)
