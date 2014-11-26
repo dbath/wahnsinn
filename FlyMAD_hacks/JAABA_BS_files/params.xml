@@ -147,7 +147,7 @@
 	baserotateby="0"
 	cannysigma="3"
 	cannythresh="0.03,0.06"
-	dosetROI="0"
+	dosetROI="1"
 	maxdcenter="10"
 	maxdradius="10"
 	meanroiradius="112.961"
@@ -203,7 +203,7 @@
 	choose_orientations_weight_use_bag="0"
 	computeBG="0"
 	dosave="1"
-	dosetBG="0"
+	dosetBG="1"
 	dosettrack="1"
 	dotrack="1"
 	dotrackwings="1"
@@ -229,7 +229,7 @@
 	typefield="sex"
 	typesmallval="M"
 	usemediandt="1"
-	vign_coef="0.596922,0.000659817,0.000725165,-8.23863e-07,1.89186e-07,-4.47465e-07,9.5061e-11,-3.59124e-10,2.42008e-10,-3.82714e-10"/>
+	vign_coef="0.553409,0.000522739,0.000679243,6.54211e-09,3.41238e-07,-6.73097e-07,-5.70474e-10,8.53918e-11,-3.89963e-10,-1.95828e-11"/>
 
 <wingtrack
 	dosetwingtrack="1"
@@ -241,7 +241,7 @@
 	min_wingcc_area="10"
 	mindbody="216.9"
 	mindwing_high="195.7"
-	mindwing_low="181.4"
+	mindwing_low="153.75"
 	nbins_dthetawing="50"
 	radius_dilate_body="0"
 	radius_open_wing="1"
@@ -258,7 +258,7 @@
 	areasmooth_maxerrx="0.279077"
 	areasmooth_maxfreq="0.005"
 	areasmooth_outlierprctile="0.1"
-	dopff="0"
+	dopff="1"
 	fov="3.14159"
 	max_dnose2ell_anglerange="127"
 	nbodylengths_near="2.5"
