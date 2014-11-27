@@ -17,7 +17,7 @@ import argparse
 
 
 
-STIM_LIST = [[120,180],[360,420]]
+
 FPS =  25.0  
 
 
@@ -26,17 +26,23 @@ parser.add_argument('--inputdir', type=str, required=True,
                         help='directory of Matebook Project files')  
 parser.add_argument('--binsize', type=str, required=True,
                         help='numerical value, size of bins in seconds')
-                       
+parser.add_argument('--assay', type=str, required=False, default='MF',
+                        help='Which assay: MF, MM, or M')                   
                         
 args = parser.parse_args()
 
 INPUT_DIR = args.inputdir
 if not os.path.exists(INPUT_DIR + '/SUMMARY_FILES'):
     os.makedirs(INPUT_DIR + '/SUMMARY_FILES')
+if not os.path.exists(INPUT_DIR + '/SUMMARY_FILES/PNG'):
+    os.makedirs(INPUT_DIR + '/SUMMARY_FILES/PNG')
+if not os.path.exists(INPUT_DIR + '/SUMMARY_FILES/PDF'):
+    os.makedirs(INPUT_DIR + '/SUMMARY_FILES/PDF')
+if not os.path.exists(INPUT_DIR + '/SUMMARY_FILES/SVG'):
+    os.makedirs(INPUT_DIR + '/SUMMARY_FILES/SVG')
 
 binsize_str = args.binsize + 's'
 binsize = float(args.binsize)
-
 
 
 MFparamlist = [['Unnamed: 3_level_0', 'courtship'],
@@ -55,12 +61,15 @@ MMparamlist = [['Unnamed: 3_level_0', 'courtship'],
             ['1', 'movedAbs_u']
             ]
             
-_paramlist = MFparamlist
-params = []
-for a,b in _paramlist:
-    params.append(b)
+Mparamlist = [['0','rightWingAngle'],
+            ['0','leftWingAngle'],
+            ['0', 'movedAbs_u'],
+            ['0', 'turnedAbs']]
 
-INDEX_NAME = ['Courtship Index',
+
+
+
+INDEX_PAIRS = ['Courtship Index',
               'Orienting Index',
               'Following Index',
               'Wing Ext. Index',
@@ -68,8 +77,28 @@ INDEX_NAME = ['Courtship Index',
               'Speed (mm/s)'
               ]
 
+INDEX_SINGLES = ['Wing Ext. Angle (right)',
+                 'Wing Ext. Angle (left)',
+                 'Speed (mm/s)',
+                 'Rotation']
 
-
+if args.assay == 'M':
+    _paramlist = Mparamlist
+    INDEX_NAME = INDEX_SINGLES
+    STIM_LIST = [[60,70],[80,90],[100,110],[120,130],[140,150],[160,170],[180,190],[200,210],[220,230],[240,250],[260,270],[280,290],
+                [300,330],[360,390],[420,450],[480,510],[540,570],[600,630],[660,690],[720,750],[780,810],[840,870]]
+if args.assay == 'MF':
+    _paramlist = MFparamlist
+    INDEX_NAME = INDEX_PAIRS 
+    STIM_LIST = [[120,180],[360,420]]   
+if args.assay == 'MM':
+    _paramlist = MMparamlist
+    INDEX_NAME = INDEX_PAIRS
+    STIM_LIST = [[120,180],[360,420]] 
+    
+params = []
+for a,b in _paramlist:
+    params.append(b)
 
 def find_files(directory, pattern):
     for root, dirs, files in os.walk(directory):
@@ -222,9 +251,9 @@ def plot_from_track(mean, sem, n, exp_id, storage_location, timestamp):#, p_vals
     #l = pl.legend(bbox_to_anchor=(0, 0, 1, 1), bbox_transform=pl.gcf().transFigure)
     plt.subplots_adjust(left=0.12, bottom=0.1, right=0.95, top=0.87, wspace=0.40, hspace=0.32)
     #plt.show()
-    fig.savefig(storage_location + exp_id + '_' + binsize_str + '.svg', bbox_inches='tight')
-    fig.savefig(storage_location + exp_id + '_' + binsize_str + '.pdf', bbox_inches='tight')
-    fig.savefig(storage_location + exp_id + '_' + binsize_str + '.png', bbox_inches='tight')
+    fig.savefig(storage_location + '/SVG/' + exp_id + '_' + binsize_str + '.svg', bbox_inches='tight')
+    fig.savefig(storage_location + '/PDF/' + exp_id + '_' + binsize_str + '.pdf', bbox_inches='tight')
+    fig.savefig(storage_location + '/PNG/' + exp_id + '_' + binsize_str + '.png', bbox_inches='tight')
     plt.close(fig)
 
 experiment_list=[]
@@ -236,56 +265,18 @@ for x in glob.glob(INPUT_DIR + '*.mbr'):
         experiment_list.append(exp_id)
         
 for experiment in experiment_list:
-    storage_location = INPUT_DIR + 'JAR/' + experiment
-    if not os.path.exists(storage_location):
-        os.makedirs(storage_location)
-    for directory in glob.glob(INPUT_DIR + experiment + '*'):
-        exp_id, timestamp = parse_tempdf_name(directory)
-        if not os.path.exists(storage_location + '/'+ exp_id + '_DetectedArena_9_arena.pickle'):
+    if not os.path.exists(INPUT_DIR + '/SUMMARY_FILES/PNG/' + experiment+ '_' + binsize_str + '.png'):
+        storage_location = INPUT_DIR + 'JAR/' + experiment
+        if not os.path.exists(storage_location):
+            os.makedirs(storage_location)
+        for directory in glob.glob(INPUT_DIR + experiment + '*'):
+            exp_id, timestamp = parse_tempdf_name(directory)
             process_data(directory, _paramlist, storage_location)
         
-    compiled = compile_data(storage_location)
-    mean, sem, n = group_data(compiled)
-    plot_from_track(mean, sem, n, experiment, INPUT_DIR + '/SUMMARY_FILES/', timestamp)
+        compiled = compile_data(storage_location)
+        mean, sem, n = group_data(compiled)
+        plot_from_track(mean, sem, n, experiment, INPUT_DIR + '/SUMMARY_FILES/', timestamp)
  
-"""   
-processed_filelist = glob.glob(JAR + '*tempdf.pickle')
-total_filelist = glob.glob(_DROP + '*/*/track.tsv')
-
-if os.path.isfile(JAR + 'mean_' + args.binsize + '.pickle') == True:
-    print "Using pickled grouped data."
-    mean =  pd.read_pickle(JAR+ 'mean_' + args.binsize + '.pickle')
-    sem = pd.read_pickle(JAR+ 'sem_' + args.binsize + '.pickle')
-    n = pd.read_pickle(JAR+ 'n_' + args.binsize + '.pickle')
-    rawfile = retrieve_data(JAR + 'rawfile.pickle')
-elif os.path.isfile(JAR+ 'rawfile.pickle') == True:
-    print "Using pickled rawfile."
-    rawfile = retrieve_data(JAR + 'rawfile.pickle')
-    mean, sem, n = group_data(rawfile, _filefile)
-elif (len(processed_filelist) < 1):
-    print "Processing data from scratch"
-    process_data(_DROP, _paramlist)
-    rawfile = compile_data(glob.glob(JAR + '*tempdf.pickle'))
-    mean, sem, n = group_data(rawfile, _filefile)
-
-else: 
-    print "Using pickled tempdf files."    
-    rawfile = compile_data(processed_filelist)
-    mean, sem, n = group_data(rawfile, _filefile)
-
-
-list_of_treatments = set((_filefile[groupinglist[1]][_filefile[groupinglist[1]].notnull()]))
-list_of_genotypes = set(_filefile[groupinglist[0]][_filefile[groupinglist[0]].notnull()])
-
-
-p = plot_from_track(mean, sem, n)#, p_vals)
-
-# GENERATE PLOTS  #
-
-
-fig = plt.figure()
-
-"""
 
 
 print "Done."
