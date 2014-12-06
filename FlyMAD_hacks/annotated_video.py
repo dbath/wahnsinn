@@ -19,8 +19,26 @@ import rosbag
 import rosbag_pandas
 import benu.benu
 import benu.utils
-
 from PIL import Image, ImageStat
+import argparse
+
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--videodir', type=str, required=True,
+                        help='directory of fmf and JAABA csv files')  
+parser.add_argument('--startframe', type=int, required=False, default=0,
+                        help='frame from fmf to start')
+parser.add_argument('--endframe', type=int, required=False, default=None,
+                        help='frame from fmf to end')
+#parser.add_argument('--binsize', type=str, required=True,
+#                      help='integer and unit, such as "5s" or "4Min"')
+
+args = parser.parse_args()
+
+VIDEO_DIR = args.videodir
+BAGS = VIDEO_DIR.rsplit('/',2)[0] + '/BAGS/'
+FIRST = args.startframe
+LAST = args.endframe
+
 
 def convert_timestamps(df):
     df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='s')
@@ -82,15 +100,6 @@ def sync_jaaba_with_ros(JAABA_path, FMF_path):
     jaaba_data['Laser_state'][jaaba_data['Laser_state'] > 0] = 1
     jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data['Timestamp'][jaaba_data[jaaba_data['Laser_state'] > 0].index[0]]
     
-    """
-    ###    WING EXTENSION    ###
-    jaaba_data['maxWingAngle'] = get_absmax(jaaba_data[['Left','Right']])
-    
-    ### ABDOMINAL BENDING   ###
-    jaaba_data[jaaba_data['Length'] > 200] = np.nan  #discard frames with bogus length.  *************
-    jaaba_data[jaaba_data['Length'] < 60] = np.nan  #discard frames with bogus length.
-    return jaaba_data
-    """
     return jaaba_data 
     
 def fmf2fig(frame, timestamp, colourmap_choice, jaaba):
@@ -99,10 +108,10 @@ def fmf2fig(frame, timestamp, colourmap_choice, jaaba):
     RightAngle = float(jaaba.Right)
     laser_alpha = float(jaaba.Laser_state)
     current_time =  jaaba.synced_time.asof(pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern'))
-    if current_time >= np.timedelta64(180, 's'):
-        laser_colour='k'
-    else:
+    if current_time >= np.timedelta64(100, 's'):
         laser_colour='r'
+    else:
+        laser_colour='k'
     frame = np.flipud(frame)
     figure = plt.figure(figsize=(image_width/100, image_height/100), dpi=200.399 )
     ax = figure.add_subplot(1,1,1)
@@ -113,7 +122,7 @@ def fmf2fig(frame, timestamp, colourmap_choice, jaaba):
     np.set_printoptions(precision=2)
     ax.text(0.01*(image_width), 0.01*(image_height), str(np.around(jaaba.ix[0].synced_time / np.timedelta64(1,'s'), 2)) +  's', 
             verticalalignment='top', horizontalalignment='left', 
-            color='white', fontsize=10) #pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern')
+            color='white', fontsize=16) #pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern')
     left = plt.Rectangle((image_width-60,image_height/2), 50, LeftAngle*300, color='#FF0000')
     right = plt.Rectangle((image_width-60, image_height/2), 50, RightAngle*300, color='#00FF00')
     laser_ind = plt.Circle((0.1*(image_width), 0.9*(image_height)), 0.05*(image_width), color=laser_colour, alpha=laser_alpha)
@@ -130,7 +139,7 @@ def fmf2fig(frame, timestamp, colourmap_choice, jaaba):
     
     return figure
 
-BAGS = '/tier2/dickson/bathd/FlyMAD/sample_fmfs_and_bags'
+
 baglist = []
 for bag in glob.glob(BAGS + '/*.bag'):
     bagtimestamp = parse_bagtime(bag)
@@ -140,31 +149,29 @@ bagframe.index = pd.to_datetime(bagframe['Timestamp'])
 bagframe = bagframe.sort()
 bagframe.to_csv(BAGS + '/list_of_bags.csv', sep=',')
 
+if not os.path.exists(VIDEO_DIR + 'temp_png'):
+    os.makedirs(VIDEO_DIR + 'temp_png')
 
 
-trx = pd.read_csv('/tier2/dickson/bathd/FlyMAD/sample_fmfs_and_bags/registered_trx.csv',sep=',', names=['Timestamp','Length','Width','Theta','Left','Right'], index_col=False)
-    
-fname = '/tier2/dickson/bathd/FlyMAD/sample_fmfs_and_bags/DB199-UC-RIR_zoom_20141005_150045.fmf' 
-fileName = '/tier2/dickson/bathd/FlyMAD/sample_fmfs_and_bags/test.png'
-fmf = FMF.FlyMovie(fname)
+fmf = FMF.FlyMovie(glob.glob(VIDEO_DIR + '*.fmf')[0])
 
-jaaba_data = sync_jaaba_with_ros('/tier2/dickson/bathd/FlyMAD/sample_fmfs_and_bags/registered_trx.csv', '/tier2/dickson/bathd/FlyMAD/sample_fmfs_and_bags/DB199-UC-RIR_zoom_20141005_150045.fmf')
+jaaba_data = sync_jaaba_with_ros((VIDEO_DIR + 'registered_trx.csv'), (glob.glob(VIDEO_DIR + '*.fmf')[0]))
 
 _frame, _timestamp = fmf.get_frame(0)
 image_width, image_height = _frame.shape
 
 
-for frame_number in range(1271,7200):#fmf.get_n_frames()):
-    if os.path.exists(BAGS + '/temp_png/_tmp%05d.png'%(frame_number-1271)):
+for frame_number in range(fmf.get_n_frames()):
+    if os.path.exists(VIDEO_DIR + 'temp_png/_tmp%05d.png'%(frame_number - FIRST)):
         continue
-    frame, timestamp = fmf.get_frame(frame_number)
+    frame, timestamp = fmf.get_frame(frame_number + FIRST)
     print frame_number #pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern'), '\t', frame_number
     
     jaaba_datum = jaaba_data[jaaba_data['Timestamp'] == pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern')]
  
     fmf2fig(frame, timestamp, cm.Greys_r, jaaba_datum)
     #plt.show()
-    plt.savefig(BAGS + '/temp_png/_tmp%05d.png'%(frame_number-1271), bbox_inches='tight', pad_inches=0)
+    plt.savefig(VIDEO_DIR + 'temp_png/_tmp%05d.png'%(frame_number - FIRST), bbox_inches='tight', pad_inches=0)
     plt.close('all')
     
 
