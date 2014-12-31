@@ -35,7 +35,7 @@ BAGS = JAABA + 'BAGS'
 
 binsize = (args.binsize)
 print "BINSIZE: ", binsize
-colourlist = ['#000000','#008000','#0032FF','r','c','m','y']
+colourlist = ['#008000','#0032FF','r','c','m','y', '#000000']
 
 #filename = '/tier2/dickson/bathd/FlyMAD/JAABA_tracking/140927/wing_angles_nano.csv'
 #binsize = '5s'  # ex: '1s' or '4Min' etc
@@ -125,7 +125,9 @@ def sync_jaaba_with_ros(FMF_DIR):
     jaaba_data['Timestamp'] = jaaba_data.index #silly pandas bug for subtracting from datetimeindex...
     
     #jaaba_data['Laser_state'][jaaba_data['Laser_state'] > 0] = 1
-    jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data.Timestamp[jaaba_data.Laser_state ==2.0].index[0]
+    jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data.Timestamp[jaaba_data.Laser_state ==4.0].index[0]
+    jaaba_data.index = jaaba_data.synced_time
+    jaaba_data.index = pd.to_datetime(jaaba_data.index)
 
     ###    WING EXTENSION    ###
     jaaba_data['maxWingAngle'] = get_absmax(jaaba_data[['Left','Right']])
@@ -144,7 +146,7 @@ def gather_data(filelist):
     for x in filelist:
         FLY_ID, FMF_TIME, GROUP = parse_fmftime(x)
         fx = pd.read_pickle(x)
-        rel = fx[['synced_time','Laser_state', 'maxWingAngle', 'Length', 'Width']]
+        rel = fx[['Laser_state', 'maxWingAngle', 'Length', 'Width']]
         rel['group'] = GROUP
         rel['FlyID'] = FLY_ID
         datadf = pd.concat([datadf, rel])
@@ -154,7 +156,7 @@ def gather_data(filelist):
 
 def group_data(raw_pickle):
     df = pd.read_pickle(raw_pickle)
-    grouped = df.groupby(['group', 'synced_time'])
+    grouped = df.groupby(['group', df.index])
     means = grouped.mean()
     means.to_csv(JAABA + 'mean_' + binsize + '.csv')
     means.to_pickle(JAABA + 'JAR/mean_' + binsize + '.pickle')
@@ -170,7 +172,10 @@ def plot_data(means, sems, measurement):
     group_number = 0
     ax = fig.add_subplot(1,1,1)
     for x in means.index.levels[0]:
-        x_values = list((means.ix[x].index)/1e9)
+        x_values = []
+        for w in means.ix[x].index:
+            x_values.append((w-pd.to_datetime(0)).total_seconds())
+        #x_values = list((means.ix[x].index - pd.to_datetime(0)).total_seconds())
         y_values = list(means.ix[x][measurement])
         psems = list(sems.ix[x][measurement])
         nsems = list(-1*(sems.ix[x][measurement]))
@@ -196,8 +201,10 @@ def plot_data(means, sems, measurement):
         ax.set_ylabel('Mean ' + measurement  + ' ' + u"\u00B1" + ' SEM', fontsize=16)
         
     ax.set_xlabel('Time (s)', fontsize=16)
-    collection = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(min(means[measurement])), ymax=1.3*(max(means[measurement])), where=means['Laser_state']>0, facecolor='red', alpha=0.3, zorder=10)
-    ax.add_collection(collection)
+    laser_1 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(min(means[measurement])), ymax=1.3*(max(means[measurement])), where=means['Laser_state']==2.0, facecolor='y', alpha=0.3, zorder=10)
+    ax.add_collection(laser_1)
+    laser_2 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(min(means[measurement])), ymax=1.3*(max(means[measurement])), where=means['Laser_state']>=2.1, facecolor='red', alpha=0.3, zorder=10)
+    ax.add_collection(laser_2)
     
     ax.legend()
     plt.show()

@@ -92,6 +92,8 @@ def sync_jaaba_with_ros(JAABA_path, FMF_path):
     
     jaaba_data = pd.read_csv(JAABA_CSV, sep=',', names=['Timestamp','Length','Width','Theta','Left','Right'], index_col=False)
     jaaba_data[['Length','Width','Left','Right']] = jaaba_data[['Length','Width','Left','Right']].astype(np.float64)
+    #jaaba_data[abs(jaaba_data['Left']) > 1.57] = 0.0
+    #jaaba_data[abs(jaaba_data['Right']) > 1.57] = 0.0
     jaaba_data = convert_timestamps(jaaba_data)
     
     jaaba_data['Laser1_state'] = binarize_laser_data(BAG_FILE, 'laser1')['Laser_state'].asof(jaaba_data.index).fillna(value=0)  #YAY! 
@@ -119,7 +121,7 @@ def fmf2fig(frame, timestamp, colourmap_choice, jaaba):
     np.set_printoptions(precision=2)
     ax.text(0.01*(image_width), 0.01*(image_height), str(np.around(jaaba.ix[0].synced_time / np.timedelta64(1,'s'), 2)) +  's', 
             verticalalignment='top', horizontalalignment='left', 
-            color='white', fontsize=16) #pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern')
+            color='white', fontsize=16)
     left = plt.Rectangle((image_width-60,image_height/2), 50, LeftAngle*300, color='#FF0000')
     right = plt.Rectangle((image_width-60, image_height/2), 50, RightAngle*300, color='#00FF00')
     RED_ind = plt.Circle((0.1*(image_width), 0.9*(image_height)), 0.05*(image_width), color='r', alpha=RED_alpha)
@@ -160,8 +162,8 @@ _frame, _timestamp = fmf.get_frame(0)
 image_width, image_height = _frame.shape
 
 
-for frame_number in range((fmf.get_n_frames() - FIRST - LAST)):
-    if os.path.exists(VIDEO_DIR + 'temp_png/_tmp%05d.png'%(frame_number - FIRST)):
+for frame_number in range((fmf.get_n_frames() - FIRST - (fmf.get_n_frames() - LAST))):
+    if os.path.exists(VIDEO_DIR + 'temp_png/_tmp%05d.png'%(frame_number)):
         continue
     frame, timestamp = fmf.get_frame(frame_number + FIRST)
     print frame_number #pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern'), '\t', frame_number

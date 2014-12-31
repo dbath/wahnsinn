@@ -241,7 +241,7 @@
 	min_wingcc_area="10"
 	mindbody="216.9"
 	mindwing_high="195.7"
-	mindwing_low="153.75"
+	mindwing_low="175.167"
 	nbins_dthetawing="50"
 	radius_dilate_body="0"
 	radius_open_wing="1"
@@ -266,7 +266,7 @@
 	thetafil="0.0625,0.25,0.375,0.25,0.0625"/>
 
 <results_movie
-	dovideo="1"
+	dovideo="0"
 	endframes="-1,-1,1"
 	figpos="1,1,1007,1007"
 	firstframes="0,0.5,-1"

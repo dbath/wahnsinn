@@ -1,0 +1,10 @@
+
+
+MATLAB/bin/matlab -nodesktop -noFigureWindows
+
+cd ~/MATLAB/scripts
+
+cbtrack_batch('/media/DBATH_6/141218_mild/filelist.txt',0)
+
+
+trx2csv('/media/DBATH_6/141218_mild/filelist.txt')
