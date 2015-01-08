@@ -25,10 +25,12 @@ parser.add_argument('--jaabadir', type=str, required=True,
 #                        help='directory of bag files')
 parser.add_argument('--binsize', type=str, required=True,
                         help='integer and unit, such as "5s" or "4Min"')
-
+parser.add_argument('--experiment', type=str, required=False,
+                        help='handle to select experiment from group (example: IRR-')
 args = parser.parse_args()
 
 JAABA = args.jaabadir
+HANDLE = args.experiment
 BAGS = JAABA + 'BAGS'
 
 #OUTPUT = args.outputdir
@@ -153,21 +155,21 @@ def gather_data(filelist):
         rel['group'] = GROUP
         rel['FlyID'] = FLY_ID
         datadf = pd.concat([datadf, rel])
-    datadf.to_csv(JAABA + 'rawdata_' + binsize + '.csv', sep=',')
-    datadf.to_pickle(JAABA + 'JAR/rawdata_' + binsize + '.pickle')
+    datadf.to_csv(JAABA + HANDLE + '_rawdata_' + binsize + '.csv', sep=',')
+    datadf.to_pickle(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
     #return wingAng 
 
 def group_data(raw_pickle):
     df = pd.read_pickle(raw_pickle)
     grouped = df.groupby(['group', df.index])
     means = grouped.mean()
-    means.to_csv(JAABA + 'mean_' + binsize + '.csv')
-    means.to_pickle(JAABA + 'JAR/mean_' + binsize + '.pickle')
+    means.to_csv(JAABA + HANDLE + '_mean_' + binsize + '.csv')
+    means.to_pickle(JAABA + 'JAR/'+HANDLE+ '_mean_' + binsize + '.pickle')
     ns = grouped.count()
-    ns.to_csv(JAABA + 'n_' + binsize + '.csv')
+    ns.to_csv(JAABA + HANDLE + '_n_' + binsize + '.csv')
     sems = grouped.aggregate(lambda x: st.sem(x, axis=None)) 
-    sems.to_csv(JAABA + 'sem_' + binsize + '.csv')
-    sems.to_pickle(JAABA + 'JAR/sem_' + binsize + '.pickle')   
+    sems.to_csv(JAABA + HANDLE + '_sem_' + binsize + '.csv')
+    sems.to_pickle(JAABA + 'JAR/' + HANDLE + '_sem_' + binsize + '.pickle')   
     return means, sems
 
 def plot_data(means, sems, measurement):
@@ -214,9 +216,10 @@ def plot_data(means, sems, measurement):
     ax.legend()
     plt.show()
     if 'maxWingAngle' in measurement:
-        fig.savefig(JAABA + 'mean_max_wing_angle_' + binsize + '_bins.svg', bbox_inches='tight')
+        fig.savefig(JAABA + HANDLE + '_mean_max_wing_angle_' + binsize + '_bins.svg', bbox_inches='tight')
     else:
-        fig.savefig(JAABA + 'mean_' + measurement + '_' + binsize + '_bins.svg', bbox_inches='tight')
+        fig.savefig(JAABA + HANDLE + '_mean_' + measurement + '_' + binsize + '_bins.svg', bbox_inches='tight')
+
 def plot_rasters(raw_pickle):
     df = pd.read_pickle(raw_pickle)
     grouped = df.groupby(['group','synced_time'])
@@ -241,29 +244,31 @@ bagframe.to_csv(BAGS + '/list_of_bags.csv', sep=',')
 if not os.path.exists(JAABA + 'JAR') ==True:
     print "MAKING A JAR"
     os.makedirs(JAABA + 'JAR')
-####assess wing data processing:
-processed_filelist = glob.glob(JAABA+ 'JAR/*' + binsize + '_fly.pickle')
-print len(processed_filelist), " files found."
-if os.path.isfile(JAABA + 'JAR/mean_' + binsize + '.pickle') == True:
-    print "Using pickled grouped data."
-    means =  pd.read_pickle(JAABA + 'JAR/mean_' + binsize + '.pickle')
-    sems = pd.read_pickle(JAABA + 'JAR/sem_' + binsize + '.pickle')
-    
-elif os.path.isfile(JAABA+'JAR/wing_angles_raw_' + binsize + '.pickle') == True:
-    print "Using pickled rawfile."
-    means, sems = group_data(JAABA + 'JAR/rawdata_' + binsize + '.pickle')
-elif (len(processed_filelist) <= 1):
-    print "Processing data from scratch"
-    for directory in glob.glob(JAABA + '*zoom*'):
+
+updated = False
+
+for directory in glob.glob(JAABA + '*' + HANDLE + '*' + '*zoom*'):
+    FLY_ID, FMF_TIME, GROUP = parse_fmftime(directory)
+    if not os.path.exists(JAABA + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle') ==True:
         sync_jaaba_with_ros(directory)
+        updated = True
         
-    gather_data(glob.glob(JAABA + 'JAR/*' + binsize + '_fly.pickle'))
-    means, sems = group_data(JAABA + 'JAR/rawdata_' + binsize + '.pickle')
-else:
-    print "Using processed fly data"
-    gather_data(glob.glob(JAABA + 'JAR/*' + binsize + '_fly.pickle'))
-    means, sems = group_data(JAABA + 'JAR/rawdata_' + binsize + '.pickle')
-    
+if updated == True:
+    print 'Found unprocessed files for the chosen bin. Compiling data...'
+    gather_data(glob.glob(JAABA + 'JAR/*' + HANDLE + '*' + binsize + '_fly.pickle'))
+    means, sems = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
+
+if not os.path.exists(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle') ==True:
+    gather_data(glob.glob(JAABA + 'JAR/*' + HANDLE + '*' + binsize + '_fly.pickle'))
+    means, sems = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
+
+if not os.path.exists(JAABA + 'JAR/'+ HANDLE + '_mean_' + binsize + '.pickle') ==True:
+    means, sems = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
+
+means =  pd.read_pickle(JAABA + 'JAR/' + HANDLE + '_mean_' + binsize + '.pickle')
+sems = pd.read_pickle(JAABA + 'JAR/' + HANDLE + '_sem_' + binsize + '.pickle')
+
+
 plot_data(means, sems, 'maxWingAngle')    
 plot_data(means, sems, 'Length')
 plot_data(means, sems, 'Width')
