@@ -1,5 +1,5 @@
 import time
-import os.path
+import os
 import glob
 import tempfile
 import shutil
@@ -22,6 +22,7 @@ import benu.utils
 from PIL import Image, ImageStat
 import argparse
 
+
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--videodir', type=str, required=True,
                         help='directory of fmf and JAABA csv files')  
@@ -35,9 +36,45 @@ parser.add_argument('--endframe', type=int, required=False, default=None,
 args = parser.parse_args()
 
 VIDEO_DIR = args.videodir
-BAGS = VIDEO_DIR.rsplit('/',2)[0] + '/BAGS/'
+BAGS = VIDEO_DIR + 'BAGS/'#VIDEO_DIR.rsplit('/',2)[0] + '/BAGS/'
 FIRST = args.startframe
 LAST = args.endframe
+
+def sendMail(RECIPIENT,SUBJECT,TEXT):
+    import sys
+    import os
+    import re
+    from smtplib import SMTP_SSL as SMTP       # this invokes the secure SMTP protocol (port 465, uses SSL)
+    # from smtplib import SMTP                  # use this for standard SMTP protocol   (port 25, no encryption)
+    from email.MIMEText import MIMEText
+    SMTPserver = 'smtp.gmail.com'
+    sender =     'danbath@gmail.com'
+    destination = [RECIPIENT]
+
+    USERNAME = "danbath"
+    PASSWORD = "4Fxahil3"
+
+    # typical values for text_subtype are plain, html, xml
+    text_subtype = 'plain'
+
+    
+    try:
+        msg = MIMEText(TEXT, text_subtype)
+        msg['Subject']=       SUBJECT
+        msg['From']   = sender # some SMTP servers will do this automatically, not all
+
+        conn = SMTP(SMTPserver)
+        conn.set_debuglevel(False)
+        conn.login(USERNAME, PASSWORD)
+        try:
+            conn.sendmail(sender, destination, msg.as_string())
+        finally:
+            conn.close()
+    
+    except Exception, exc:
+        sys.exit( "mail failed; %s" % str(exc) ) # give a error message
+
+
 
 
 def convert_timestamps(df):
@@ -105,6 +142,7 @@ def sync_jaaba_with_ros(JAABA_path, FMF_path):
     return jaaba_data 
     
 def fmf2fig(frame, timestamp, colourmap_choice, jaaba):
+    image_width, image_height = frame.shape
     #elapsed_time = int(timestamp - starting_timestamp)
     LeftAngle = float(jaaba.Left)
     RightAngle = float(jaaba.Right)
@@ -125,7 +163,7 @@ def fmf2fig(frame, timestamp, colourmap_choice, jaaba):
     left = plt.Rectangle((image_width-60,image_height/2), 50, LeftAngle*300, color='#FF0000')
     right = plt.Rectangle((image_width-60, image_height/2), 50, RightAngle*300, color='#00FF00')
     RED_ind = plt.Circle((0.1*(image_width), 0.9*(image_height)), 0.05*(image_width), color='r', alpha=RED_alpha)
-    IR_ind = plt.Circle((0.1*(image_width)+0.06*(image_width), 0.9*(image_height)), 0.05*(image_width), color='k', alpha=IR_alpha)
+    IR_ind = plt.Circle((0.25*(image_width), 0.9*(image_height)), 0.05*(image_width), color='k', alpha=IR_alpha)
     ax.text(image_width-30, (image_height - 20)/2, 'L', horizontalalignment='center', verticalalignment='bottom',
                                                                 color='white', fontsize=22)
     ax.text(image_width-30, (image_height + 20)/2, 'R', horizontalalignment='center', verticalalignment='top',
@@ -141,6 +179,8 @@ def fmf2fig(frame, timestamp, colourmap_choice, jaaba):
     return figure
 
 
+
+
 baglist = []
 for bag in glob.glob(BAGS + '/*.bag'):
     bagtimestamp = parse_bagtime(bag)
@@ -150,30 +190,57 @@ bagframe.index = pd.to_datetime(bagframe['Timestamp'])
 bagframe = bagframe.sort()
 bagframe.to_csv(BAGS + '/list_of_bags.csv', sep=',')
 
-if not os.path.exists(VIDEO_DIR + 'temp_png'):
-    os.makedirs(VIDEO_DIR + 'temp_png')
 
-
-fmf = FMF.FlyMovie(glob.glob(VIDEO_DIR + '*.fmf')[0])
-
-jaaba_data = sync_jaaba_with_ros((VIDEO_DIR + 'registered_trx.csv'), (glob.glob(VIDEO_DIR + '*.fmf')[0]))
-
-_frame, _timestamp = fmf.get_frame(0)
-image_width, image_height = _frame.shape
-
-
-for frame_number in range((fmf.get_n_frames() - FIRST - (fmf.get_n_frames() - LAST))):
-    if os.path.exists(VIDEO_DIR + 'temp_png/_tmp%05d.png'%(frame_number)):
-        continue
-    frame, timestamp = fmf.get_frame(frame_number + FIRST)
-    print frame_number #pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern'), '\t', frame_number
+def make_png_set(_VIDEO_DIR):
+    if os.path.exists(_VIDEO_DIR + '/flymad_annotated.mp4'):  ###should use complete mp4 file here
+        print 'skipping already finished file:', _VIDEO_DIR
+        return
     
-    jaaba_datum = jaaba_data[jaaba_data['Timestamp'] == pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern')]
+    
+    if not os.path.exists(_VIDEO_DIR + '/temp_png'):
+        os.makedirs(_VIDEO_DIR + '/temp_png')
+
+    for x in glob.glob(_VIDEO_DIR + '/*.fmf'):
+        fmf = FMF.FlyMovie(x)
+        jaaba_data = sync_jaaba_with_ros((_VIDEO_DIR + '/registered_trx.csv'), x)
+    
+
+    if LAST == None:
+        _LAST = fmf.get_n_frames()
+    else:
+        _LAST = LAST
+
+    for frame_number in range((fmf.get_n_frames() - FIRST - (fmf.get_n_frames() - _LAST))):
+
+        if os.path.exists(_VIDEO_DIR + '/temp_png/_tmp%05d.png'%(frame_number)):
+            continue
+        frame, timestamp = fmf.get_frame(frame_number + FIRST)
+        #print frame_number #pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern'), '\t', frame_number
+        
+        jaaba_datum = jaaba_data[jaaba_data['Timestamp'] == pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern')]
  
-    fmf2fig(frame, timestamp, cm.Greys_r, jaaba_datum)
-    #plt.show()
-    plt.savefig(VIDEO_DIR + 'temp_png/_tmp%05d.png'%(frame_number), bbox_inches='tight', pad_inches=0)
-    plt.close('all')
+        fmf2fig(frame, timestamp, cm.Greys_r, jaaba_datum)
+        #plt.show()
+        plt.savefig(_VIDEO_DIR + '/temp_png/_tmp%05d.png'%(frame_number), bbox_inches='tight', pad_inches=0)
+        plt.close('all')
     
+    sendMail('bathd@janelia.hhmi.org','movie is finished', (x + ' has finished processing.'))
+    
+for x in glob.glob(VIDEO_DIR + '*costim*' + '*zoom*'):
+    print "processing:", x
+    make_png_set(x)
+    #os.system(ffmpeg -f image2 -r 15 -i _tmp%05d.png -vcodec mpeg4 -y (_VIDEO_DIR + '/flymad_annotated.mp4'))
 
+"""    
+ffmpeg -f image2 -r 1/5 -i image%05d.png -vcodec mpeg4 -y movie.mp4
+
+
+ffmpeg = script
+
+-f = 
+
+image2 = 
+
+-r 1/5 =  framerate of 5s per image. for 15FPS, use -r 15
+"""
 
