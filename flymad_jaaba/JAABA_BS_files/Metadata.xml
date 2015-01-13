@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<experiment assay="FlyBowl" exp_datetime="20140204T140620" experimenter="montagues" protocol="unknown" screen_type="non_olympiad_heberlein_shelbyDL" screen_reason="25C" data_capture_version="C1.0" >
+  <session id="1">
+    <apparatus apparatus_id="Rig1__Plate10__Lid01__BowlA__Camera0053300093034301__ComputerWINDOWS-HDJT1RT__HardDriveInternal_D" room="2C.310.1" rig="1" plate="10" top_plate="01" visual_surround="1" bowl="A" camera="0053300093034301" computer="WINDOWS-HDJT1RT" harddrive="Internal_D"/>
+    <flies line="DL" effector="DLwildtype" gender="b" cross_date="????????" flip_date="????????" hours_starved="0.000000" cross_barcode="-1" flip_used="-1" wish_list="-1" robot_stock_copy="unknown" num_flies="0">
+      <rearing rearing_protocol="unknown" rearing_incubator="1" />
+      <handling handling_protocol="unknown" handler_cross="Shelby" handler_sorting="Shelby" hours_sorted="-1.000000" handler_starvation="unknown" seconds_shiftflytemp="-1.000000" seconds_fliesloaded="34.464005" num_flies_dead="0" num_flies_damaged="0" />
+    </flies>
+  </session>
+  <environment temperature="NaN" humidity="NaN" />
+  <notes_behavioral>None</notes_behavioral>
+  <notes_technical>None</notes_technical>
+  <notes_keyword></notes_keyword>
+  <flag_review>0</flag_review>
+  <flag_redo>0</flag_redo>
+  <flag_aborted>0</flag_aborted>
+  <flag_legacy>0</flag_legacy>
+</experiment>
