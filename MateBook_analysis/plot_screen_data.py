@@ -14,8 +14,7 @@ import pylab as pl
 from scipy import stats as st
 import pickle
 import argparse
-
-
+import flymad_jaaba.utilities as utilities
 
 
 FPS =  25.0  
@@ -23,23 +22,27 @@ FPS =  25.0
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--inputdir', type=str, required=True,
-                        help='directory of Matebook Project files')  
+                        help='directory of Matebook Project files')
+parser.add_argument('--outputdir', type=str, required=True,
+                        help='directory of Matebook Project files')   
 parser.add_argument('--binsize', type=str, required=True,
                         help='numerical value, size of bins in seconds')
 parser.add_argument('--assay', type=str, required=False, default='MF',
                         help='Which assay: MF, MM, or M')                   
-                        
+parser.add_argument('--email', type=str, required=False, default=None,
+                        help='email address for notification (optional)')                  
 args = parser.parse_args()
 
 INPUT_DIR = args.inputdir
-if not os.path.exists(INPUT_DIR + '/SUMMARY_FILES'):
-    os.makedirs(INPUT_DIR + '/SUMMARY_FILES')
-if not os.path.exists(INPUT_DIR + '/SUMMARY_FILES/PNG'):
-    os.makedirs(INPUT_DIR + '/SUMMARY_FILES/PNG')
-if not os.path.exists(INPUT_DIR + '/SUMMARY_FILES/PDF'):
-    os.makedirs(INPUT_DIR + '/SUMMARY_FILES/PDF')
-if not os.path.exists(INPUT_DIR + '/SUMMARY_FILES/SVG'):
-    os.makedirs(INPUT_DIR + '/SUMMARY_FILES/SVG')
+OUTPUT_DIR = args.outputdir
+if not os.path.exists(OUTPUT_DIR + '/SUMMARY_FILES'):
+    os.makedirs(OUTPUT_DIR + '/SUMMARY_FILES')
+if not os.path.exists(OUTPUT_DIR + '/SUMMARY_FILES/PNG'):
+    os.makedirs(OUTPUT_DIR + '/SUMMARY_FILES/PNG')
+if not os.path.exists(OUTPUT_DIR + '/SUMMARY_FILES/PDF'):
+    os.makedirs(OUTPUT_DIR + '/SUMMARY_FILES/PDF')
+if not os.path.exists(OUTPUT_DIR + '/SUMMARY_FILES/SVG'):
+    os.makedirs(OUTPUT_DIR + '/SUMMARY_FILES/SVG')
 
 binsize_str = args.binsize + 's'
 binsize = float(args.binsize)
@@ -265,8 +268,8 @@ for x in glob.glob(INPUT_DIR + '*.mbr'):
         experiment_list.append(exp_id)
         
 for experiment in experiment_list:
-    if not os.path.exists(INPUT_DIR + '/SUMMARY_FILES/PNG/' + experiment+ '_' + binsize_str + '.png'):
-        storage_location = INPUT_DIR + 'JAR/' + experiment
+    if not os.path.exists(OUTPUT_DIR + '/SUMMARY_FILES/PNG/' + experiment+ '_' + binsize_str + '.png'):
+        storage_location = OUTPUT_DIR + 'JAR/' + experiment
         if not os.path.exists(storage_location):
             os.makedirs(storage_location)
         for directory in glob.glob(INPUT_DIR + experiment + '*'):
@@ -275,8 +278,7 @@ for experiment in experiment_list:
         
         compiled = compile_data(storage_location)
         mean, sem, n = group_data(compiled)
-        plot_from_track(mean, sem, n, experiment, INPUT_DIR + '/SUMMARY_FILES/', timestamp)
+        plot_from_track(mean, sem, n, experiment, OUTPUT_DIR + '/SUMMARY_FILES/', timestamp)
  
-
-
+utilities.sendMail(args.email, 'Matebook processing finished', ('Your files are available at: ' + OUTPUT_DIR))
 print "Done."
