@@ -68,14 +68,14 @@ class TargetDetector(object):
     
         wide_fmf = FMF.FlyMovie(self._fmf_filepath)
         frame0, _ = wide_fmf.get_frame(0)
-        image_width, image_height = frame0.shape
-        acc=np.zeros((image_width, image_height), np.float32) # 32 bit accumulator
+        image_height, image_width = frame0.shape
+        acc=np.zeros((image_height, image_width), np.float32) # 32 bit accumulator
         for frame_number in range(0, wide_fmf.get_n_frames(), self._sample_rate):
             frame, timestamp = wide_fmf.get_frame(frame_number)
             acc = np.maximum.reduce([frame, acc])
-        self.create_png(acc)
-        plt.savefig(self._tempdir + 'background.png', dpi=1)
-        plt.close('all')
+        cv2.imshow('background',acc)
+        cv2.imwrite((self._tempdir + 'background.png'), acc)
+        cv2.destroyAllWindows()
         return
         
     def get_dirs(self):
@@ -116,6 +116,28 @@ class TargetDetector(object):
         cv2.imwrite((self._tempdir + 'targets.png'), background_image)
         cv2.destroyAllWindows()  
     
+    def plot_trajectory_on_background(self, bagfile):
+        
+        if not os.path.exists(self._tempdir + 'targets.png'):
+            self.plot_targets_on_background()
+        
+        im = cv2.imread(self._tempdir + 'targets.png')
+        positions = utilities.get_positions_from_bag(bagfile)
+        distances = self.get_dist_to_nearest_target(bagfile)
+        for ts in positions.index:
+            x = int(np.rint(positions.fly_x[ts]))
+            y = int(np.rint(positions.fly_y[ts]))
+            d = int(np.rint(distances.dtarget[ts]))
+            if d > 255:
+                dblue = 255
+            else:
+                dblue = d
+            
+            cv2.circle(im, (x,y), 1, (dblue, 0, (255-dblue)))
+        cv2.imshow('traj', im)
+        cv2.imwrite((self._tempdir + 'trajectory.png'), im)
+        cv2.destroyAllWindows() 
+    
     def get_targets(self):
         return self._targets
     
@@ -128,7 +150,7 @@ class TargetDetector(object):
         distances = DataFrame()
         for target in range(len(self._targets)):
             px, py, pr = self._targets[target]
-            distances['d'+ str(target)] = (((positions['fly_x'] - px)**2 + (positions['fly_y'] - py)**2)**0.5) - pr
+            distances['d'+ str(target)] = (((positions['fly_x'] - px)**2 + (positions['fly_y'] - py)**2)**0.5)# - pr
         
         distances['Timestamp'] = positions.Timestamp
         distances = utilities.convert_timestamps(distances)

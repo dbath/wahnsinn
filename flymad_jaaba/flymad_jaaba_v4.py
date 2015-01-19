@@ -26,7 +26,7 @@ parser.add_argument('--jaabadir', type=str, required=True,
 #parser.add_argument('--bagdir', type=str, required=True,
 #                        help='directory of bag files')
 parser.add_argument('--binsize', type=str, required=True,
-                        help='integer and unit, such as "5s" or "4Min"')
+                        help='integer and unit, such as "5s" or "4Min" or "500ms"')
 parser.add_argument('--experiment', type=str, required=False,
                         help='handle to select experiment from group (example: IRR-')
 args = parser.parse_args()
@@ -137,6 +137,7 @@ def sync_jaaba_with_ros(FMF_DIR):
     # COMPUTE AND ALIGN DISTANCE TO NEAREST TARGET
     targets = target_detector.TargetDetector(WIDE_FMF, FMF_DIR)
     targets.plot_targets_on_background()
+    targets.plot_trajectory_on_background(BAG_FILE)
     jaaba_data['dtarget'] = targets.get_dist_to_nearest_target(BAG_FILE)['dtarget'].asof(jaaba_data.index).fillna(value=0)
     
     
@@ -161,6 +162,7 @@ def sync_jaaba_with_ros(FMF_DIR):
     jaaba_data = bin_data(jaaba_data, binsize)
     ###  SAVE DATA ###
     jaaba_data.to_pickle(JAABA + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle')
+    
     
 def gather_data(filelist):
     datadf = DataFrame()
