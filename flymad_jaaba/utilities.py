@@ -65,3 +65,45 @@ def get_positions_from_bag(BAG_FILE):
         baginfo.append((t.secs +t.nsecs*1e-9,msg.fly_x, msg.fly_y))
     baginfo = DataFrame(baginfo, columns=['Timestamp', 'fly_x', 'fly_y'], dtype=np.float64)
     return baginfo
+    
+def sendMail(RECIPIENT,SUBJECT,TEXT):
+    import sys
+    import os
+    import re
+    from smtplib import SMTP_SSL as SMTP       # this invokes the secure SMTP protocol (port 465, uses SSL)
+    # from smtplib import SMTP                  # use this for standard SMTP protocol   (port 25, no encryption)
+    from email.MIMEText import MIMEText
+    SMTPserver = 'smtp.gmail.com'
+    sender =     'danbath@gmail.com'
+    destination = [RECIPIENT]
+
+    USERNAME = "danbath"
+    PASSWORD = "4Fxahil3"
+
+    # typical values for text_subtype are plain, html, xml
+    text_subtype = 'plain'
+
+    
+    try:
+        msg = MIMEText(TEXT, text_subtype)
+        msg['Subject']=       SUBJECT
+        msg['From']   = sender # some SMTP servers will do this automatically, not all
+
+        conn = SMTP(SMTPserver)
+        conn.set_debuglevel(False)
+        conn.login(USERNAME, PASSWORD)
+        try:
+            conn.sendmail(sender, destination, msg.as_string())
+        finally:
+            conn.close()
+    
+    except Exception, exc:
+        sys.exit( "mail failed; %s" % str(exc) ) # give a error message
+        
+def get_calibration_asof_filename(filename):
+    if '.bag' in filename:
+        ftime = parse_bagtime(filename)
+    if '.fmf' in filename:
+        _, ftime, __ = parse_fmftime(filename)
+    
+    
