@@ -13,9 +13,9 @@ from scipy import stats as st
 
 DROP = '/groups/dickson/home/bathd/Desktop/DROP/'   #Location of behavior.tsv and filenames.csv files
 
-CONTROL_GENOTYPE = 'DN_scr_16xTNT_'
+CONTROL_GENOTYPE = '\+'
 
-CONTROL_TREATMENT = 'MF'
+CONTROL_TREATMENT = 'MM'
 
 groupinglist = ['Tester',
                 'Target',
@@ -79,6 +79,7 @@ print 'removed bad arenas'
 rawfile = rawfile[rawfile['quality'] < 1]      #REMOVE EMPTY ARENAS
 rawfile = rawfile[np.isfinite(rawfile['courtship'])]  #REMOVE NON-ARENAS
 print 'removed empty arenas'
+print rawfile
 
 
 #GET LIST OF GENOTYPES FROM FILENAMES.CSV
@@ -137,9 +138,10 @@ for i in paramlist:
         #Mann-Whitney test = st.ranksums
         
         z_stat_gt, p_val_gt = st.ranksums(df[(df[groupinglist[0]] == j) & (df[groupinglist[1]] == k)][i], 
-                                        df[(df[groupinglist[0]] == CONTROL_GENOTYPE) & (df[groupinglist[1]] == k)][i]) 
+                                        df[(df[groupinglist[0]].str.contains(CONTROL_GENOTYPE)) & (df[groupinglist[1]] == k)][i]) 
         z_stat_tr, p_val_tr = st.ranksums(df[(df[groupinglist[0]] == j) & (df[groupinglist[1]] == k)][i], 
                                         df[(df[groupinglist[0]] == j) & (df[groupinglist[1]] == CONTROL_TREATMENT)][i]) 
+
 
         p_vals_gt_rounded = [ '%.4f' % elem for elem in p_vals_gt]
         p_vals_tr_rounded = [ '%.4f' % elem for elem in p_vals_tr]

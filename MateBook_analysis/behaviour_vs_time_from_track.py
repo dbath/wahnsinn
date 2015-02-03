@@ -59,7 +59,7 @@ _filefile.index.name = 'Video'
 
 
 
-CONTROL_GENOTYPE = 'uas-Chrimson/+'
+CONTROL_GENOTYPE = '\+'
 
 CONTROL_TREATMENT = ''
 
