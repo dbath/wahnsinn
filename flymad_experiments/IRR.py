@@ -16,7 +16,7 @@ class Experiment:
                                             latch=True) #latched so message is guarenteed to arrive      
         #configure the lasers
         self._ir_laser_conf.publish(enable=True,   #always enabled, we turn it on/off using /experiment/laser
-                                 frequency=0,      
+                                 frequency=20,      
                                  intensity=0.0)    #full power
         
 
@@ -48,7 +48,7 @@ class Experiment:
     def run(self):
         T_WAIT          = 60
         IR_BOUTS        = 3
-        T_IR_ON         = 15
+        T_IR_ON         = 5
         T_IR_OFF        = 5
         T_RED           = 20
         T_WAIT2         = 60
@@ -66,6 +66,8 @@ class Experiment:
         try:
             repeat = 0
             rospy.sleep(T_WAIT)
+
+
             while ( repeat < 1 ) and not (rospy.is_shutdown()):
                 if (repeat == 0):
                     #rospy.loginfo(self._OK_to_initialize)
@@ -76,6 +78,8 @@ class Experiment:
                         rospy.loginfo("...WAITING FOR ACCURATE TARGETING TO INITIATE STIMULUS")
                         continue
                 rospy.loginfo('IR only')
+                
+
                 for x in range(IR_BOUTS):
                     self._laser(IR_LASER)
                     rospy.sleep(T_IR_ON)
