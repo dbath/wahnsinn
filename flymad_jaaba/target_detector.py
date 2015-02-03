@@ -13,6 +13,9 @@ import argparse
 import cv2
 import shutil
 import flymad_jaaba.utilities as utilities
+import roslib; roslib.load_manifest('flymad')
+import flymad.madplot as madplot
+import flymad.flymad_analysis_dan as flymad_analysis
 
 
 
@@ -38,16 +41,14 @@ class TargetDetector(object):
         if not os.path.exists(self._tempdir) == True:
             os.makedirs(self._tempdir)
         
-        self._sample_rate = sample_rate    # = n for every nth frame
-        """
-        self._targets = self.detect_targets(self._fmf_filepath, self._tempdir)
+        self._calibration_file = utilities.get_calibration_asof_filename(self._fmf_filepath)
         
-        if tempdir == None:
-            shutil.rmtree(self._tempdir)
-        else:
-            self.plot_targets_on_background((tempdir+'background.png'), self._targets, self._tempdir)
-        """
-        return
+        self._arena = madplot.Arena(convert=False, **flymad_analysis.get_arena_conf(calibration_file=self._calibration_file))
+        
+        self._sample_rate = sample_rate    # = n for every nth frame
+        
+        self._targets = self.detect_targets()
+        
     
         
             
@@ -82,6 +83,8 @@ class TargetDetector(object):
         return self._fmf_filepath, self._tempdir
              
     def detect_targets(self):#, _fmf_filepath, _tempdir):
+        
+        (cx, cy), cr = self._arena.circ
     
         if not os.path.exists(self._tempdir + 'background.png'):
             self.generate_background_image()
@@ -98,9 +101,12 @@ class TargetDetector(object):
         self._targets = []
         for c in contours_targets:
             area = cv2.contourArea(c)
+            #TARGETS MUST BE APPROPRIATE SIZE
             if (area >= 50) and (area <=300):
-                (cx,cy), radius = cv2.minEnclosingCircle(c)
-                self._targets.append([cx,cy, radius])
+                (x,y), radius = cv2.minEnclosingCircle(c)
+                #CHECK IF TARGET IN CENTRE 80% OF ARENA
+                if ( ((x - cx)**2 + (y - cy)**2) <= (cr*0.7)**2): 
+                    self._targets.append([x,y, radius])
         return self._targets
 
     def plot_targets_on_background(self):
@@ -111,7 +117,12 @@ class TargetDetector(object):
             y = int(np.rint(coords[1]))
             r = int(np.rint(coords[2]))
             cv2.circle(background_image, (x, y), r, (255, 0, 0), 2)
+        
+        (cx, cy), cr = self._arena.circ
+        cv2.circle(background_image, (int(cx), int(cy)),int(cr), (0,255,0),2)
+        #cv2.circle(background_image, (int(cx), int(cy)),int(cr*.6), (0,128,0),1)
         cv2.imshow('targets', background_image)
+        
         #cv2.waitKey(0)
         cv2.imwrite((self._tempdir + 'targets.png'), background_image)
         cv2.destroyAllWindows()  
@@ -133,7 +144,7 @@ class TargetDetector(object):
             else:
                 dblue = d
             
-            cv2.circle(im, (x,y), 1, (dblue, 0, (255-dblue)))
+            cv2.circle(im, (x,y), 1, (dblue, 0, (255-dblue)), -1)
         cv2.imshow('traj', im)
         cv2.imwrite((self._tempdir + 'trajectory.png'), im)
         cv2.destroyAllWindows() 

@@ -50,7 +50,7 @@ def fmf2fig(frame, timestamp, colourmap_choice, jaaba, ax):
     RED_ind = plt.Circle((0.1*(image_width), 0.9*(image_height)), 0.05*(image_width), color='r', alpha=RED_alpha)
     IR_ind = plt.Circle((0.25*(image_width), 0.9*(image_height)), 0.05*(image_width), color='k', alpha=IR_alpha)
     #plot proximity
-    proxi = plt.Rectangle((image_width-50,((image_height/2) - (proximity_val/2))), 50, proximity_val, color='#0000FF', alpha=0.0)###blocked pending bug fix FIXME
+    proxi = plt.Rectangle((image_width-50,((image_height/2) - (proximity_val/2))), 50, proximity_val, color='#0000FF', alpha=1.0)
     
     ax.text(image_width-85, (image_height - 20)/2, 'L', horizontalalignment='center', verticalalignment='bottom',color='white', fontsize=22)
     ax.text(image_width-85, (image_height + 20)/2, 'R', horizontalalignment='center', verticalalignment='top', color='white', fontsize=22)
@@ -161,6 +161,17 @@ def sync_jaaba_with_ros(FMF_DIR, BAGS, JAABA):
 
     return jaaba_data
 
+def get_window_of_data(timestamp, data, windowsize): #timestamp is timestamp object, data is df, windowsize is integer in seconds
+    timestamp = pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern')
+    window_td = datetime.timedelta(0,windowsize,0)
+    first_ts = timestamp - window_td
+    last_ts = timetamp + window_td
+    #window_data = data[(data['Timestamp'] >= first_ts) & ( data['Timestamp'] <= last_ts)]
+    
+    #next plot all the data, but on a plot with xlim +/- time window. add this as a subplot beneath video
+    
+    
+    
 def get_frame_number_at_or_before_timestamp(fmf_object, timestamp): #stolen and modified from motmot!
     tss = fmf_object.get_all_timestamps()
     at_or_before_timestamp_cond = tss <= timestamp

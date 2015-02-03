@@ -18,32 +18,7 @@ import flymad_jaaba.target_detector as target_detector
 # column 2: left wing angle
 # column 3: right wing angle
 
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--jaabadir', type=str, required=True,
-                        help='directory of JAABA csv files')  
-#parser.add_argument('--outputdir', type=str, required=True,
-#                        help='directory to store analysis')
-#parser.add_argument('--bagdir', type=str, required=True,
-#                        help='directory of bag files')
-parser.add_argument('--binsize', type=str, required=True,
-                        help='integer and unit, such as "5s" or "4Min" or "500ms"')
-parser.add_argument('--experiment', type=str, required=False,
-                        help='handle to select experiment from group (example: IRR-')
-args = parser.parse_args()
 
-JAABA = args.jaabadir
-HANDLE = args.experiment
-BAGS = JAABA + 'BAGS'
-
-#OUTPUT = args.outputdir
-
-binsize = (args.binsize)
-print "BINSIZE: ", binsize
-colourlist = ['#008000','#0032FF','r','c','m','y', '#000000']
-
-#filename = '/tier2/dickson/bathd/FlyMAD/JAABA_tracking/140927/wing_angles_nano.csv'
-#binsize = '5s'  # ex: '1s' or '4Min' etc
-#BAG_FILE = '/groups/dickson/home/bathd/Dropbox/140927_flymad_rosbag_copy/rosbagOut_2014-09-27-14-53-54.bag'
 
 
 def convert_timestamps(df):
@@ -159,9 +134,12 @@ def sync_jaaba_with_ros(FMF_DIR):
     trace.savefig(JAABA + 'TRACES/' + FLY_ID + '.png')
     plt.close('all')
     
-    jaaba_data = bin_data(jaaba_data, binsize)
-    ###  SAVE DATA ###
-    jaaba_data.to_pickle(JAABA + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle')
+    if 'binsize' in globals():
+        jaaba_data = bin_data(jaaba_data, binsize)
+        jaaba_data.to_pickle(JAABA + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle')
+    else:
+        return jaaba_data
+    
     
     
 def gather_data(filelist):
@@ -271,50 +249,77 @@ def plot_rasters(raw_pickle):
         group_number +=1
         actions = []
         
+if __name__ == "__main__":
 
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--jaabadir', type=str, required=True,
+                            help='directory of JAABA csv files')  
+    #parser.add_argument('--outputdir', type=str, required=True,
+    #                        help='directory to store analysis')
+    #parser.add_argument('--bagdir', type=str, required=True,
+    #                        help='directory of bag files')
+    parser.add_argument('--binsize', type=str, required=True,
+                            help='integer and unit, such as "5s" or "4Min" or "500ms"')
+    parser.add_argument('--experiment', type=str, required=False,
+                            help='handle to select experiment from group (example: IRR-')
+    args = parser.parse_args()
 
-baglist = []
-for bag in glob.glob(BAGS + '/*.bag'):
-    bagtimestamp = parse_bagtime(bag)
-    baglist.append((bag, bagtimestamp))
-bagframe = DataFrame(baglist, columns=['Filepath', 'Timestamp'])
-bagframe.index = pd.to_datetime(bagframe['Timestamp'])
-bagframe = bagframe.sort()
-bagframe.to_csv(BAGS + '/list_of_bags.csv', sep=',')
+    JAABA = args.jaabadir
+    HANDLE = args.experiment
+    BAGS = JAABA + 'BAGS'
 
-if not os.path.exists(JAABA + 'JAR') ==True:
-    print "MAKING A JAR"
-    os.makedirs(JAABA + 'JAR')
-if not os.path.exists(JAABA + 'TRACES') ==True:
-    os.makedirs(JAABA + 'TRACES')
-    
-updated = False
+    #OUTPUT = args.outputdir
 
-for directory in glob.glob(JAABA + '*' + HANDLE + '*' + '*zoom*'):
-    FLY_ID, FMF_TIME, GROUP = parse_fmftime(directory)
-    if not os.path.exists(JAABA + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle') ==True:
-        sync_jaaba_with_ros(directory)
-        updated = True
+    binsize = (args.binsize)
+    print "BINSIZE: ", binsize
+    colourlist = ['#008000','#0032FF','r','c','m','y', '#000000']
+
+    #filename = '/tier2/dickson/bathd/FlyMAD/JAABA_tracking/140927/wing_angles_nano.csv'
+    #binsize = '5s'  # ex: '1s' or '4Min' etc
+    #BAG_FILE = '/groups/dickson/home/bathd/Dropbox/140927_flymad_rosbag_copy/rosbagOut_2014-09-27-14-53-54.bag'
+    baglist = []
+    for bag in glob.glob(BAGS + '/*.bag'):
+        bagtimestamp = parse_bagtime(bag)
+        baglist.append((bag, bagtimestamp))
+    bagframe = DataFrame(baglist, columns=['Filepath', 'Timestamp'])
+    bagframe.index = pd.to_datetime(bagframe['Timestamp'])
+    bagframe = bagframe.sort()
+    bagframe.to_csv(BAGS + '/list_of_bags.csv', sep=',')
+
+    if not os.path.exists(JAABA + 'JAR') ==True:
+        print "MAKING A JAR"
+        os.makedirs(JAABA + 'JAR')
+    if not os.path.exists(JAABA + 'TRACES') ==True:
+        os.makedirs(JAABA + 'TRACES')
         
-if updated == True:
-    print 'Found unprocessed files for the chosen bin. Compiling data...'
-    gather_data(glob.glob(JAABA + 'JAR/*' + HANDLE + '*' + binsize + '_fly.pickle'))
-    means, sems = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
+    updated = False
 
-if not os.path.exists(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle') ==True:
-    gather_data(glob.glob(JAABA + 'JAR/*' + HANDLE + '*' + binsize + '_fly.pickle'))
-    means, sems = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
+    for directory in glob.glob(JAABA + '*' + HANDLE + '*' + '*zoom*'):
+        FLY_ID, FMF_TIME, GROUP = parse_fmftime(directory)
+        if not os.path.exists(JAABA + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle') ==True:
+            sync_jaaba_with_ros(directory)
+            updated = True
+            
+    if updated == True:
+        print 'Found unprocessed files for the chosen bin. Compiling data...'
+        gather_data(glob.glob(JAABA + 'JAR/*' + HANDLE + '*' + binsize + '_fly.pickle'))
+        means, sems = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
 
-if not os.path.exists(JAABA + 'JAR/'+ HANDLE + '_mean_' + binsize + '.pickle') ==True:
-    means, sems = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
+    if not os.path.exists(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle') ==True:
+        gather_data(glob.glob(JAABA + 'JAR/*' + HANDLE + '*' + binsize + '_fly.pickle'))
+        means, sems = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
 
-means =  pd.read_pickle(JAABA + 'JAR/' + HANDLE + '_mean_' + binsize + '.pickle')
-sems = pd.read_pickle(JAABA + 'JAR/' + HANDLE + '_sem_' + binsize + '.pickle')
+    if not os.path.exists(JAABA + 'JAR/'+ HANDLE + '_mean_' + binsize + '.pickle') ==True:
+        means, sems = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
+
+    means =  pd.read_pickle(JAABA + 'JAR/' + HANDLE + '_mean_' + binsize + '.pickle')
+    sems = pd.read_pickle(JAABA + 'JAR/' + HANDLE + '_sem_' + binsize + '.pickle')
 
 
-plot_data(means, sems, 'maxWingAngle')    
-plot_data(means, sems, 'Length')
-plot_data(means, sems, 'Width')
-plot_data(means, sems, 'dtarget')
+    plot_data(means, sems, 'maxWingAngle')    
+    plot_data(means, sems, 'Length')
+    plot_data(means, sems, 'Width')
+    plot_data(means, sems, 'dtarget')
+
 
 

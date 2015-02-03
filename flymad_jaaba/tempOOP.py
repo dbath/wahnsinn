@@ -5,7 +5,7 @@ import flymad_jaaba.target_detector as target_detector
 import matplotlib.pyplot as plt
 
 
-fmf_file = '/media/DBATH_5/150107/DB201-GP-costim_wide_20150107_185416.fmf'
+fmf_file = '/media/DBATH_5/150107/DB201-GP-costim_wide_20150107_174101.fmf'
 
 bagdir = '/media/DBATH_5/150107/BAGS'
 
