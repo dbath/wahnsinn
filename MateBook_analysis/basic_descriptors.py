@@ -13,7 +13,7 @@ from scipy import stats as st
 
 DROP = '/groups/dickson/home/bathd/Desktop/DROP/'   #Location of behavior.tsv and filenames.csv files
 
-CONTROL_GENOTYPE = '\+'
+CONTROL_GENOTYPE = 'ctrl'
 
 CONTROL_TREATMENT = 'MM'
 
@@ -79,7 +79,6 @@ print 'removed bad arenas'
 rawfile = rawfile[rawfile['quality'] < 1]      #REMOVE EMPTY ARENAS
 rawfile = rawfile[np.isfinite(rawfile['courtship'])]  #REMOVE NON-ARENAS
 print 'removed empty arenas'
-print rawfile
 
 
 #GET LIST OF GENOTYPES FROM FILENAMES.CSV
