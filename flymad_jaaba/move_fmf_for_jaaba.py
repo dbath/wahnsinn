@@ -20,8 +20,8 @@ for fmf in glob.glob(INPUTDIR + '*.fmf'):
         filelist.append(newdir)
         os.makedirs(newdir)
         shutil.move(fmf, newdir+'/')
-        shutil.copy('/groups/dickson/home/bathd/wahnsinn/FlyMAD_hacks/JAABA_BS_files/Metadata.xml', newdir+'/') #silly.
-        shutil.copy('/groups/dickson/home/bathd/wahnsinn/FlyMAD_hacks/JAABA_BS_files/params.xml', newdir+'/') #silly.
+        shutil.copy('/groups/dickson/home/bathd/wahnsinn/flymad_jaaba/JAABA_BS_files/Metadata.xml', newdir+'/') #silly.
+        shutil.copy('/groups/dickson/home/bathd/wahnsinn/flymad_jaaba/JAABA_BS_files/params.xml', newdir+'/') #silly.
 fileDF = DataFrame(filelist)
 fileDF.to_csv(INPUTDIR + 'filelist.txt', sep='\n', header=None, index=None)
 
