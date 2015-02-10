@@ -229,7 +229,7 @@
 	typefield="sex"
 	typesmallval="M"
 	usemediandt="1"
-	vign_coef="0.553409,0.000522739,0.000679243,6.54211e-09,3.41238e-07,-6.73097e-07,-5.70474e-10,8.53918e-11,-3.89963e-10,-1.95828e-11"/>
+	vign_coef="0.608421,0.000660594,0.00071838,-6.83654e-07,2.29008e-07,-6.11814e-07,-8.79999e-11,-1.63231e-10,-2.10072e-11,-2.10298e-10"/>
 
 <wingtrack
 	dosetwingtrack="1"
@@ -241,7 +241,7 @@
 	min_wingcc_area="10"
 	mindbody="216.9"
 	mindwing_high="195.7"
-	mindwing_low="175.167"
+	mindwing_low="179.061"
 	nbins_dthetawing="50"
 	radius_dilate_body="0"
 	radius_open_wing="1"
