@@ -19,7 +19,7 @@ import flymad_jaaba.target_detector as target_detector
 # column 3: right wing angle
 
 
-
+NANOSECONDS_PER_SECOND = 1000000000
 
 def convert_timestamps(df):
     df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='s')
@@ -117,17 +117,20 @@ def sync_jaaba_with_ros(FMF_DIR):
     
     
     jaaba_data['Timestamp'] = jaaba_data.index #silly pandas bug for subtracting from datetimeindex...
-    
-    jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data.Timestamp[jaaba_data.Laser1_state > 0].index[0]
+    try:
+        jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data.Timestamp[(jaaba_data.Laser2_state + jaaba_data.Laser1_state) > 0].index[0]
+    except:
+        print "WARNING:   Cannot synchronize by stimulus. Setting T0 to frame0. "
+        jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data.Timestamp.index[0]
     jaaba_data.index = jaaba_data.synced_time
     jaaba_data.index = pd.to_datetime(jaaba_data.index)
 
     ###    WING EXTENSION    ###
     jaaba_data['maxWingAngle'] = get_absmax(jaaba_data[['Left','Right']])
-    #jaaba_data[jaaba_data['maxWingAngle'] > 1.57] = np.nan
+    jaaba_data[jaaba_data['maxWingAngle'] > 1.57] = np.nan
     
     ### ABDOMINAL BENDING   ###
-    jaaba_data[jaaba_data['Length'] > 200] = np.nan  #discard frames with bogus length.  *************
+    jaaba_data[jaaba_data['Length'] > 110] = np.nan  #discard frames with bogus length.  *************
     jaaba_data[jaaba_data['Length'] < 60] = np.nan  #discard frames with bogus length.
     
     trace = plot_single_trace(jaaba_data)
@@ -149,6 +152,11 @@ def gather_data(filelist):
         EXP_ID, DATE, TIME = FLY_ID.split('_', 4)[0:3]
         fx = pd.read_pickle(x)
         fx = fx[fx.columns]
+        PC_wing = fx[(fx.index >= pd.to_datetime(60*NANOSECONDS_PER_SECOND)) & (fx.index <= pd.to_datetime(120*NANOSECONDS_PER_SECOND))]['maxWingAngle']
+        WEI = float(PC_wing[PC_wing >= 0.524].count()) / float(PC_wing.count())
+        if WEI < WEI_THRESHOLD:
+            print FLY_ID, " excluded from analysis, with wing extension index: " , WEI , "."
+            continue
         fx['group'] = EXP_ID
         fx['FlyID'] = FLY_ID
         datadf = pd.concat([datadf, fx])
@@ -225,12 +233,11 @@ def plot_data(means, sems, measurement):
         ax.set_ylabel('Mean ' + measurement  + ' ' + u"\u00B1" + ' SEM', fontsize=16)
         
     ax.set_xlabel('Time (s)', fontsize=16)
-    laser_1 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(means[measurement].min()), ymax=1.3*(means[measurement].max()), where=means['Laser1_state'] > 0, facecolor='#999999', alpha=1.0, zorder=10) #green b2ffb2
+    laser_1 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(means[measurement].min()), ymax=1.3*(means[measurement].max()), where=means['Laser1_state'] > 0, facecolor='#DCDCDC', linewidth=0, edgecolor=None, alpha=1.0, zorder=10) #green b2ffb2
     ax.add_collection(laser_1)
-    laser_2 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(means[measurement].min()), ymax=1.3*(means[measurement].max()), where=means['Laser2_state'] > 0, facecolor='#FFB2B2', alpha=1.0, zorder=10) #red FFB2B2
+    laser_2 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(means[measurement].min()), ymax=1.3*(means[measurement].max()), where=means['Laser2_state'] > 0, facecolor='#FFB2B2', linewidth=0, edgecolor=None, alpha=1.0, zorder=10) #red FFB2B2
     ax.add_collection(laser_2)
-    laser_1_2 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(means[measurement].min()), ymax=1.3*(means[measurement].max()), where=((means['Laser1_state'] > 0) & (means['Laser2_state'] > 0)) , facecolor='#FF9999', alpha=1.0, zorder=11) #yellow FFFFB2
-    ax.add_collection(laser_1_2)
+    
     
     ax.legend()
     plt.show()
@@ -261,12 +268,16 @@ if __name__ == "__main__":
     parser.add_argument('--binsize', type=str, required=True,
                             help='integer and unit, such as "5s" or "4Min" or "500ms"')
     parser.add_argument('--experiment', type=str, required=False,
-                            help='handle to select experiment from group (example: IRR-')
+                            help='handle to select experiment from group (example: IRR-)')
+    parser.add_argument('--threshold', type=float, required=False, default=0.000, 
+                            help='minimum wing extension index between 60s and 120s.')
+        
     args = parser.parse_args()
 
     JAABA = args.jaabadir
     HANDLE = args.experiment
     BAGS = JAABA + 'BAGS'
+    WEI_THRESHOLD = args.threshold
 
     #OUTPUT = args.outputdir
 
