@@ -41,4 +41,4 @@ if __name__ == "__main__":
     ax.set_xlabel('Time (min)')
         
     plt.show()
-    plt.savefig(_DIR + '/figure.svg')
+    plt.savefig(_DIR + 'figure.svg')

@@ -85,7 +85,7 @@ def binarize_laser_data(BAG_FILE, laser_number):
     for topic, msg, t in bagfile.read_messages('/flymad_micro/'+laser_number+'/current'):
         laser_current.append((t.secs +t.nsecs*1e-9,msg.data))
     laser_data = DataFrame(laser_current, columns=['Timestamp', 'Laser_state'], dtype=np.float64)
-    laser_data['Laser_state'][laser_data['Laser_state'] > 0] = 1.0
+    laser_data['Laser_state'][laser_data['Laser_state'] > 0.0] = 1.0
     laser_data = convert_timestamps(laser_data)
     return laser_data
     
@@ -152,7 +152,7 @@ def gather_data(filelist):
         EXP_ID, DATE, TIME = FLY_ID.split('_', 4)[0:3]
         fx = pd.read_pickle(x)
         fx = fx[fx.columns]
-        PC_wing = fx[(fx.index >= pd.to_datetime(60*NANOSECONDS_PER_SECOND)) & (fx.index <= pd.to_datetime(120*NANOSECONDS_PER_SECOND))]['maxWingAngle']
+        PC_wing = fx[(fx.index >= pd.to_datetime(THRESH_ON*NANOSECONDS_PER_SECOND)) & (fx.index <= pd.to_datetime(THRESH_OFF*NANOSECONDS_PER_SECOND))]['maxWingAngle']
         WEI = float(PC_wing[PC_wing >= 0.524].count()) / float(PC_wing.count())
         if WEI < WEI_THRESHOLD:
             print FLY_ID, " excluded from analysis, with wing extension index: " , WEI , "."
@@ -164,18 +164,28 @@ def gather_data(filelist):
     datadf.to_pickle(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
     #return wingAng return FLY_ID, fmftime, exp_id exp_id, CAMN, DATE, TIME = fn.split('_', 3)
 
+def pool_genotypes(df):
+    for item in POOL_CONTROL:
+        df = df.replace(to_replace=item, value='pooled controls')
+    for item in POOL_EXP:
+        df = df.replace(to_replace=item, value='experiment')       
+    return df
+    
 def group_data(raw_pickle):
     df = pd.read_pickle(raw_pickle)
+    df = pool_genotypes(df)
     grouped = df.groupby(['group', df.index])
     means = grouped.mean()
+    ns = grouped.count()
+    sems = grouped.aggregate(lambda x: st.sem(x, axis=None))
     means.to_csv(JAABA + HANDLE + '_mean_' + binsize + '.csv')
     means.to_pickle(JAABA + 'JAR/'+HANDLE+ '_mean_' + binsize + '.pickle')
-    ns = grouped.count()
-    ns.to_csv(JAABA + HANDLE + '_n_' + binsize + '.csv')
-    sems = grouped.aggregate(lambda x: st.sem(x, axis=None)) 
+    ns.to_csv(JAABA + HANDLE + '_n_' + binsize + '.csv') 
+    ns.to_pickle(JAABA + 'JAR/' + HANDLE + '_n_' + binsize + '.pickle')   
     sems.to_csv(JAABA + HANDLE + '_sem_' + binsize + '.csv')
     sems.to_pickle(JAABA + 'JAR/' + HANDLE + '_sem_' + binsize + '.pickle')   
-    return means, sems
+    
+    return means, sems, ns
 
 def plot_single_trace(jaaba_data):
     fig = plt.figure()
@@ -199,28 +209,40 @@ def plot_single_trace(jaaba_data):
         ax.set_xlabel('Time (s)', fontsize=16)
     return fig
 
-def plot_data(means, sems, measurement):
+def plot_data(means, sems, ns, measurement):
     fig = plt.figure()
     group_number = 0
     ax = fig.add_subplot(1,1,1)
     for x in means.index.levels[0]:
+        max_n = ns.ix[x]['FlyID'].max()
         x_values = []
+        y_values = []
+        psems = []
+        nsems = []
+        laser_x = []
         for w in means.ix[x].index:
-            x_values.append((w-pd.to_datetime(0)).total_seconds())
+            laser_x.append((w-pd.to_datetime(0)).total_seconds())
+            if ns.ix[x]['FlyID'][w] >= ((max_n)-1): #(max_n/3):
+                #print ns.ix[x]['FlyID'][w]
+                x_values.append((w-pd.to_datetime(0)).total_seconds())
+                y_values.append(means.ix[x,w][measurement])
+                psems.append(sems.ix[x,w][measurement])
+                nsems.append(-1.0*sems.ix[x,w][measurement])
         #x_values = list((means.ix[x].index - pd.to_datetime(0)).total_seconds())
-        y_values = list(means.ix[x][measurement])
-        psems = list(sems.ix[x][measurement])
-        nsems = list(-1*(sems.ix[x][measurement]))
+        #y_values = list(means.ix[x][measurement])
+        #psems = list(sems.ix[x][measurement])
+        #nsems = list(-1*(sems.ix[x][measurement]))
         top_errbar = tuple(map(sum, zip(psems, y_values)))
         bottom_errbar = tuple(map(sum, zip(nsems, y_values)))
-        p = plt.plot(x_values, y_values, linewidth=8, zorder=100,
+        p = plt.plot(x_values, y_values, linewidth=3, zorder=100,
                         linestyle = '-',
                         color=colourlist[group_number],
-                        label=x) 
+                        label=(x + ', n= ' + str(max_n))) 
         q = plt.fill_between(x_values, 
                             top_errbar, 
                             bottom_errbar, 
                             alpha=0.15, 
+                            linewidth=0,
                             zorder=90,
                             color=colourlist[group_number],
                             )
@@ -229,22 +251,29 @@ def plot_data(means, sems, measurement):
     ax.set_ylim(0.85*(means[measurement].min()),1.15*(means[measurement].max()))
     if 'maxWingAngle' in measurement:
         ax.set_ylabel('Mean maximum wing angle (rad)' + ' ' + u"\u00B1" + ' SEM', fontsize=16)   # +/- sign is u"\u00B1"
+    elif 'dtarget' in measurement:
+        ax.set_ylabel('Mean min. distance to target (px)' + ' ' + u"\u00B1" + ' SEM', fontsize=16)   # +/- sign is u"\u00B1"
+        
     else:
         ax.set_ylabel('Mean ' + measurement  + ' ' + u"\u00B1" + ' SEM', fontsize=16)
         
     ax.set_xlabel('Time (s)', fontsize=16)
-    laser_1 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(means[measurement].min()), ymax=1.3*(means[measurement].max()), where=means['Laser1_state'] > 0, facecolor='#DCDCDC', linewidth=0, edgecolor=None, alpha=1.0, zorder=10) #green b2ffb2
+    laser_1 = collections.BrokenBarHCollection.span_where(laser_x, ymin=0.85*(means[measurement].min()), ymax=1.15*(means[measurement].max()), where=means['Laser1_state'] > 0.1, facecolor='#DCDCDC', linewidth=0, edgecolor=None, alpha=1.0, zorder=10) #green b2ffb2
     ax.add_collection(laser_1)
-    laser_2 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(means[measurement].min()), ymax=1.3*(means[measurement].max()), where=means['Laser2_state'] > 0, facecolor='#FFB2B2', linewidth=0, edgecolor=None, alpha=1.0, zorder=10) #red FFB2B2
+    laser_2 = collections.BrokenBarHCollection.span_where(laser_x, ymin=0.85*(means[measurement].min()), ymax=1.15*(means[measurement].max()), where=means['Laser2_state'] > 0.1, facecolor='#FFB2B2', linewidth=0, edgecolor=None, alpha=1.0, zorder=10) #red FFB2B2
     ax.add_collection(laser_2)
     
     
-    ax.legend()
-    plt.show()
+    l = plt.legend()
+    l.set_zorder(1000)
     if 'maxWingAngle' in measurement:
         fig.savefig(JAABA + HANDLE + '_mean_max_wing_angle_' + binsize + '_bins.svg', bbox_inches='tight')
+        fig.savefig(JAABA + HANDLE + '_mean_max_wing_angle_' + binsize + '_bins.pdf', bbox_inches='tight')
+        fig.savefig(JAABA + HANDLE + '_mean_max_wing_angle_' + binsize + '_bins.png', bbox_inches='tight')
     else:
         fig.savefig(JAABA + HANDLE + '_mean_' + measurement + '_' + binsize + '_bins.svg', bbox_inches='tight')
+        fig.savefig(JAABA + HANDLE + '_mean_' + measurement + '_' + binsize + '_bins.pdf', bbox_inches='tight')
+        fig.savefig(JAABA + HANDLE + '_mean_' + measurement + '_' + binsize + '_bins.png', bbox_inches='tight')
 
 def plot_rasters(raw_pickle):
     df = pd.read_pickle(raw_pickle)
@@ -269,16 +298,22 @@ if __name__ == "__main__":
                             help='integer and unit, such as "5s" or "4Min" or "500ms"')
     parser.add_argument('--experiment', type=str, required=False,
                             help='handle to select experiment from group (example: IRR-)')
-    parser.add_argument('--threshold', type=float, required=False, default=0.000, 
-                            help='minimum wing extension index between 60s and 120s.')
+    parser.add_argument('--threshold', type=str, required=False, default=0.000, 
+                            help='list threshold boundaries and threshold, delimited by -. ex: 60-120-0.5   =   minimum 0.5 WEI between 60s and 120s.')
+    parser.add_argument('--pool_controls', type=str,  required=False, default = '',
+                            help="list exact strings of control genotypes delimited by comma ex: DB204-GP-IRR,DB202-GP-IRR")
+    parser.add_argument('--pool_experiment', type=str,  required=False, default = '',
+                            help="list exact strings of experimental genotypes delimited by comma ex: DB204-GP-IRR,DB202-GP-IRR")
         
     args = parser.parse_args()
 
     JAABA = args.jaabadir
     HANDLE = args.experiment
     BAGS = JAABA + 'BAGS'
-    WEI_THRESHOLD = args.threshold
-
+    THRESH_ON, THRESH_OFF, WEI_THRESHOLD = (args.threshold).split('-')
+    THRESH_ON, THRESH_OFF, WEI_THRESHOLD = float(THRESH_ON), float(THRESH_OFF), float(WEI_THRESHOLD)
+    POOL_CONTROL = [str(item) for item in args.pool_controls.split(',')]
+    POOL_EXP = [str(item) for item in args.pool_experiment.split(',')]
     #OUTPUT = args.outputdir
 
     binsize = (args.binsize)
@@ -313,24 +348,24 @@ if __name__ == "__main__":
             
     if updated == True:
         print 'Found unprocessed files for the chosen bin. Compiling data...'
-        gather_data(glob.glob(JAABA + 'JAR/*' + HANDLE + '*' + binsize + '_fly.pickle'))
-        means, sems = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
-
+    gather_data(glob.glob(JAABA + 'JAR/*' + HANDLE + '*' + binsize + '_fly.pickle'))
+    means, sems, ns = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
+    """
     if not os.path.exists(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle') ==True:
         gather_data(glob.glob(JAABA + 'JAR/*' + HANDLE + '*' + binsize + '_fly.pickle'))
         means, sems = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
 
     if not os.path.exists(JAABA + 'JAR/'+ HANDLE + '_mean_' + binsize + '.pickle') ==True:
         means, sems = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
-
+    """
     means =  pd.read_pickle(JAABA + 'JAR/' + HANDLE + '_mean_' + binsize + '.pickle')
     sems = pd.read_pickle(JAABA + 'JAR/' + HANDLE + '_sem_' + binsize + '.pickle')
+    ns = pd.read_pickle(JAABA + 'JAR/' + HANDLE + '_n_' + binsize + '.pickle')
 
-
-    plot_data(means, sems, 'maxWingAngle')    
-    plot_data(means, sems, 'Length')
-    plot_data(means, sems, 'Width')
-    plot_data(means, sems, 'dtarget')
+    plot_data(means, sems, ns, 'maxWingAngle')    
+    plot_data(means, sems, ns, 'Length')
+    plot_data(means, sems, ns, 'Width')
+    plot_data(means, sems, ns, 'dtarget')
 
 
 

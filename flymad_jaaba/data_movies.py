@@ -92,7 +92,11 @@ class FlyPanel(object):
         jaaba_data['dtarget'] = targets.get_dist_to_nearest_target(BAG_FILE)['dtarget'].asof(jaaba_data.index).fillna(value=0)
         
         jaaba_data['Timestamp'] = jaaba_data.index  #silly pandas bug for subtracting from datetimeindex...
-        jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data['Timestamp'][jaaba_data[jaaba_data['Laser1_state'] > 0].index[0]]    
+        try:
+            jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data.Timestamp[(jaaba_data.Laser2_state + jaaba_data.Laser1_state) > 0].index[0]
+        except:
+            print "WARNING:   Cannot synchronize by stimulus. Setting T0 to frame0. "
+            jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data.Timestamp.index[0]   
         
         #DISCARD BOGUS WING ANGLE VALUES:
         jaaba_data['Left'][jaaba_data['Left'] < -2.3 ]= np.nan   #2.09 for 120degrees
@@ -112,7 +116,12 @@ class FlyPanel(object):
             data = self.sync_jaaba_with_ros(self._fmf_dir, (self._expdir + '/BAGS'), (self._expdir + '/'))
             data.to_pickle(self._savedir +'/'+ self._handle + '_cache.pickle')
         data = pd.read_pickle(self._savedir +'/'+ self._handle + '_cache.pickle')
-        zero_timestamp = data['Timestamp'][data[data['Laser1_state'] > 0].index[0]]
+        try:
+            zero_timestamp = data['Timestamp'][data[data.Laser1_state + data.Laser2_state > 0].index[0]]
+        except:
+            print "WARNING:   Cannot synchronize by stimulus. Setting T0 to frame0. "
+            zero_timestamp = data['Timestamp'].index[0]
+        
         zero_ts_float = (np.datetime64(zero_timestamp.to_datetime()) - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 's')
         frame_at_t0 = self.get_frame_number_at_or_before_timestamp(fmf, zero_ts_float)
         return fmf, data, frame_at_t0    
@@ -183,8 +192,15 @@ class FlyPanel(object):
 
        
        
-    def plot_moving_window(self, timestamp,  windowsize, ax, measurement, colour, title):
-     
+    def plot_moving_window(self, timestamp,  windowsize, ax, measurement, colour, title, xtitle):
+        """
+        timestamp = timestamp object corresponding to current frame
+        windowsize = full span of the plot in seconds
+        ax = subplot name
+        measurement = thing to plot
+        colour = line colour
+        title = y axis title
+        """
         timestamp = pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern')
         window_td = datetime.timedelta(0,windowsize,0)
         first_ts = (timestamp - window_td)
@@ -199,9 +215,10 @@ class FlyPanel(object):
         
         #ax.set_xlim(first_ts, last_ts)
         ax.set_ylim(0.85*(min(self._data[measurement])),1.15*(max(self._data[measurement])))
-        ax.set_ylabel(title , fontsize=10)
-        ax.set_xlabel('Time (s)', fontsize=12)
+        ax.set_ylabel(title , fontsize=8)
         ax.tick_params(axis='y', which='major', labelsize=8)
+        if xtitle == 'w_titles': 
+            ax.set_xlabel('Time (s)', fontsize=12)
         
     def plot_extending_line(self, timestamp, ax, measurement, colour, title, left_bound, right_bound, axtitle): 
         
