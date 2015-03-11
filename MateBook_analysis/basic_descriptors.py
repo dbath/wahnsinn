@@ -13,9 +13,9 @@ from scipy import stats as st
 
 DROP = '/groups/dickson/home/bathd/Desktop/DROP/'   #Location of behavior.tsv and filenames.csv files
 
-CONTROL_GENOTYPE = 'ctrl'
+CONTROL_GENOTYPE = '\+ / UAS-TNTE'
 
-CONTROL_TREATMENT = 'MM'
+CONTROL_TREATMENT = 'OE16MM'
 
 groupinglist = ['Tester',
                 'Target',
@@ -44,7 +44,9 @@ INDEX_NAME = ['Courtship Index',
               'Wing Ext. Index'
               ]
               
-colourlist = ['k', 'g', 'b', 'r', 'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed', 'DarkGreen', 'DarkBlue', 'CornflowerBlue']
+#colourlist = ['#1A1A1A','#5F5F5F', '#0033CC',  'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed', 'DarkGreen', 'DarkBlue', 'CornflowerBlue']
+#colourlist = ['#333333', '#6685E0','#0033CC', '#66C266', '#009900']
+colourlist = ['#333333', '#CC80E6','#9900CC', '#009900', '#0033CC']
 #colourlist = ['#000000','#0000FF', '#FF0000',  '#8EC8FF', '#999999' ,'#FF9966']
 
 LINE_STYLE_LIST = ['-', '--', '-.', ':']
@@ -75,6 +77,8 @@ rawfile = pd.read_table('/groups/dickson/home/bathd/Desktop/DROP/behavior.tsv', 
 """
 
 rawfile = rawfile[rawfile['quality'] > 0.8]    #REMOVE LOW QUALITY ARENAS
+rawfile = rawfile[rawfile['wingExt (0)'] < 0.9] #REMOVE POSTURE DEFECTS
+rawfile = rawfile[rawfile['wingExt (1)'] < 0.9]  #REMOVE POSTURE DEFECTS
 print 'removed bad arenas'
 rawfile = rawfile[rawfile['quality'] < 1]      #REMOVE EMPTY ARENAS
 rawfile = rawfile[np.isfinite(rawfile['courtship'])]  #REMOVE NON-ARENAS
@@ -116,7 +120,7 @@ for i in paramlist:
     sems = sem[i] 
     ns = n[i]
 
-    opacity = np.arange(0.5,1.0,(0.5/len(list_of_treatments)))
+    opacity = np.arange(1.0,1.0,(0.5/len(list_of_treatments)))
     index = np.arange(len(list_of_treatments))
     bar_width = 1.0/(len(list_of_genotypes))
     error_config = {'ecolor': '0.1'}
@@ -129,7 +133,7 @@ for i in paramlist:
         index_num = list(list_of_treatments).index(k)
         
         p = plt.bar(0.1*(index_num+1)+index_num+(bar_width*bar_num), means[j,k], bar_width,
-                    alpha=opacity[index_num],
+                    alpha=1.0,#opacity[index_num],
                     color=colourlist[bar_num],
                     yerr=sems[j,k],
                     error_kw=error_config,

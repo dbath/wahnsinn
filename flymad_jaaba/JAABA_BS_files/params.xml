@@ -241,7 +241,7 @@
 	min_wingcc_area="10"
 	mindbody="216.9"
 	mindwing_high="195.7"
-	mindwing_low="179.061"
+	mindwing_low="182.955"
 	nbins_dthetawing="50"
 	radius_dilate_body="0"
 	radius_open_wing="1"

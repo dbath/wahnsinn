@@ -59,9 +59,9 @@ _filefile.index.name = 'Video'
 
 
 
-CONTROL_GENOTYPE = '\+'
+CONTROL_GENOTYPE = '\+ / UAS-TNTE'
 
-CONTROL_TREATMENT = ''
+CONTROL_TREATMENT = 'OE16'
 
 groupinglist = ['Tester',
                 'Target'
@@ -96,7 +96,9 @@ INDEX_NAME = ['Courtship Index',
               'Speed (mm/s)'
               ]
               
-colourlist = ['k','b', 'r', 'c', 'm', 'y','g', 'DarkGreen', 'DarkBlue', 'Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed',   'CornflowerBlue']
+#colourlist = [ 'c', 'm','b', 'r', 'y','g', 'k', 'DarkGreen', 'DarkBlue', 'Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed',   'CornflowerBlue']
+#colourlist = ['#333333', '#66C266', '#009900', '#6685E0','#0033CC']
+colourlist = ['#333333', '#CC80E6','#9900CC', '#009900', '#0033CC']
 #colourlist = ['#000000','#0000FF', '#FF0000',  '#8EC8FF', '#999999' ,'#FF9966']
 #colourlist = ['#008000','#0032FF','#000000','r','c','m','y']
 
@@ -155,9 +157,11 @@ def process_data(directory, paramlist):
                 tempdf[j[1]] = fi[j[0],j[1]]
                 if 'movedAbs_u' in j:
                     tempdf[j[1]] = tempdf[j[1]] * FPS
+                if 'copulating' not in j:
+                    pass#tempdf[j[1]][fi['0', 'copulating'] == 1] = np.nan
         tempdf['Time'] = tempdf.index/FPS
         tempdf.to_pickle(JAR + tag + '_tempdf.pickle')
-        print ".....", tag, " processed to pickling."
+        print ".....", tag, "processed to pickling."
     return 
 
 def retrieve_data(filename):
@@ -172,7 +176,6 @@ def compile_data(files):
     vidlist = []
     flyIDlist = []
     for x in files:
-        print x
         tempdf = pd.read_pickle(x)
         dflist.append(tempdf)
         vidname, flyID = parse_tempdf_name(x)
@@ -218,7 +221,7 @@ def group_data(rawfile, filefile):
     
 
 def plot_from_track(mean, sem, n):#, p_vals):
-    fig = plt.figure()
+    fig = plt.figure(figsize=(10,18))
     mean = mean.sort(columns = 'Time')
     sem = sem.sort(columns = 'Time')
     n = n.sort(columns = 'Time')
@@ -248,11 +251,11 @@ def plot_from_track(mean, sem, n):#, p_vals):
             nsems = list(-1*(sems.ix[j[0]]))
             top_errbar = tuple(map(sum, zip(psems, y)))
             bottom_errbar = tuple(map(sum, zip(nsems, y)))
-            print "adding: ", j[0], j[1], "to ", i, " plot.", bar_num
+            print "adding:", j[0], j[1], "to", i, "plot."
             p = plt.plot(x, y, linewidth=2, zorder=100,
                         linestyle = LINE_STYLE_LIST[index_num],
                         color=colourlist[bar_num],
-                        label=[j[0],j[1]]) 
+                        label=(str(j[0]) + ' ' + str(j[1]) + ', n= ' + str(ns.ix[j[0]].max()))) 
             q = plt.fill_between(x, 
                                 top_errbar, 
                                 bottom_errbar, 
@@ -266,12 +269,14 @@ def plot_from_track(mean, sem, n):#, p_vals):
         ax.set_ylabel(INDEX_NAME[params.index(i)] + ' ' + u"\u00B1" + ' SEM')   # +/- sign is u"\u00B1"
         ax.set_xlabel('Time (s)')
         for ons, offs in STIM_LIST:
-            ax.axvspan(ons, offs,  facecolor='red', alpha=0.3, zorder=10)
+            ax.axvspan(ons, offs,  facecolor='red', linewidth=0, edgecolor=None, alpha=0.3, zorder=10)
         #ax.set_title(i)
         #ax.savefig(OUTPUT + i + '_vs_time.svg', bbox_inches='tight')
 
     l = pl.legend(bbox_to_anchor=(0, 0, 1, 1), bbox_transform=pl.gcf().transFigure)
-
+    
+    plt.subplots_adjust(left=0.08, bottom=0.03, right=0.98, top=0.94, wspace=0.20, hspace=0.24)
+    
     plt.show()
     fig.savefig(OUTPUT + 'behaviour_vs_time_' + args.binsize + '.svg', bbox_inches='tight')
 
