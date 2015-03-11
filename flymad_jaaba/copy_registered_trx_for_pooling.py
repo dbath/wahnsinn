@@ -19,7 +19,11 @@ args = parser.parse_args()
 
 SEARCH_TERM = args.searchterm
 SEARCH_DIR = args.searchdir
+if (SEARCH_DIR[-1] != '/'):
+    SEARCH_DIR = SEARCH_DIR + '/'
 POOL_DIR = args.pooldir
+if (POOL_DIR[-1] != '/'):
+    POOL_DIR = POOL_DIR + '/'
 
 filelist = []
 
@@ -32,7 +36,7 @@ def find_files(directory, pattern):
 
 
 def copy_with_dirs(fullpath):
-    newpath = POOL_DIR + '/'.join(fullpath.split('/')[-3:])
+    newpath = POOL_DIR + '/'.join(fullpath.split('/')[-2:])
     if not os.path.exists(newpath) ==True:
         os.makedirs('/'.join(newpath.split('/')[:-1]) + '/')
     shutil.copy(fullpath, newpath)
