@@ -31,7 +31,7 @@ class FlyPanel(object):
     """
     pass an fmf, data, and panel position to generate subplots.
     """
-    def __init__(self, fmf_dir, savedir, fly_id):
+    def __init__(self, fmf_dir, savedir, fly_id, plot_overlays=False):
         
         if (savedir[-1] == '/' ):
             savedir = savedir[:-1]
@@ -46,7 +46,7 @@ class FlyPanel(object):
         else:
             self._fmf_dir  = fmf_dir
             
-        self._plot_overlays = False
+        self._plot_overlays = plot_overlays
         
         self._expdir = fmf_dir.rsplit('/', 1)[0]
         
@@ -65,6 +65,9 @@ class FlyPanel(object):
 
     def get_frame(self, framenumber):
         return self._zoomfmf.get_frame(framenumber)
+        
+    def get_n_frames(self):
+        return self._zoomfmf.get_n_frames()
            
     def sync_jaaba_with_ros(self, FMF_DIR, BAGS, JAABA):
 
@@ -83,8 +86,8 @@ class FlyPanel(object):
         jaaba_data = utilities.convert_timestamps(jaaba_data)
         
         # ALIGN LASER STATE DATA
-        jaaba_data['Laser1_state'] = utilities.binarize_laser_data(BAG_FILE, 'laser1')['Laser_state'].asof(jaaba_data.index).fillna(value=0)  #YAY! 
-        jaaba_data['Laser2_state'] = utilities.binarize_laser_data(BAG_FILE, 'laser2')['Laser_state'].asof(jaaba_data.index).fillna(value=0)
+        jaaba_data['Laser1_state'] = utilities.binarize_laser_data(BAG_FILE, 2).resample('67ms', how='max')['Laser_state'].asof(jaaba_data.index).fillna(value=0)  #YAY! 
+        jaaba_data['Laser2_state'] = utilities.binarize_laser_data(BAG_FILE, 4).resample('67ms', how='max')['Laser_state'].asof(jaaba_data.index).fillna(value=0)
         
         # COMPUTE AND ALIGN DISTANCE TO NEAREST TARGET
         targets = target_detector.TargetDetector(WIDE_FMF, FMF_DIR)
@@ -99,8 +102,8 @@ class FlyPanel(object):
             jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data.Timestamp.index[0]   
         
         #DISCARD BOGUS WING ANGLE VALUES:
-        jaaba_data['Left'][jaaba_data['Left'] < -2.3 ]= np.nan   #2.09 for 120degrees
-        jaaba_data['Right'][jaaba_data['Right'] > 2.3] = np.nan
+        jaaba_data['Left'][jaaba_data['Left'] < -2.09 ]= np.nan   #2.09 for 120degrees
+        jaaba_data['Right'][jaaba_data['Right'] > 2.09] = np.nan
         
         jaaba_data['maxWingAngle'] = jaaba_data[['Left','Right']].abs().max(axis=1)
         
@@ -126,6 +129,18 @@ class FlyPanel(object):
         frame_at_t0 = self.get_frame_number_at_or_before_timestamp(fmf, zero_ts_float)
         return fmf, data, frame_at_t0    
     
+    def get_zero_timestamp(self):
+        try:
+            zero_timestamp = self._data['Timestamp'][self._data[self._data.Laser1_state + self._data.Laser2_state > 0].index[0]]
+        except:
+            print "WARNING:   Cannot synchronize by stimulus. Setting T0 to frame0. "
+            zero_timestamp = self._data['Timestamp'].index[0]
+        
+        zero_ts_float = (np.datetime64(zero_timestamp.to_datetime()) - np.datetime64('1970-01-01T00:00:00Z')) / np.timedelta64(1, 's')
+        return zero_ts_float
+        
+        
+    
     def get_frame_number_at_or_before_timestamp(self, fmf_object, timestamp): #stolen and modified from motmot!
         tss = fmf_object.get_all_timestamps()
         at_or_before_timestamp_cond = tss <= timestamp
@@ -134,7 +149,15 @@ class FlyPanel(object):
             raise ValueError("no frames at or before timestamp given")
         fno = nz[0][-1]
         return fno
-    
+        
+    def get_frame_at_or_before_timestamp(self, fmf_object, timestamp): #stolen and modified from motmot!
+        tss = fmf_object.get_all_timestamps()
+        at_or_before_timestamp_cond = tss <= timestamp
+        nz = np.nonzero(at_or_before_timestamp_cond)
+        if len(nz)==0:
+            raise ValueError("no frames at or before timestamp given")
+        fno = nz[0][0]
+        return fno    
     
     
     def set_overlays(self, toggle):
@@ -231,6 +254,8 @@ class FlyPanel(object):
                                (self._data.synced_time <= np.timedelta64(right_bound, 's'))]
         visible_data = axis_data[(axis_data.index <= timestamp)]
         
+        #laser_values = self.******
+        
         x_values = (visible_data['synced_time'] / np.timedelta64(1,'s')).values
         y_values = visible_data[measurement].values
         
@@ -244,17 +269,26 @@ class FlyPanel(object):
             ax.tick_params(axis='y', which='major', labelsize=12)  
 
 
-        plt.axvline((visible_data['synced_time'][-1] / np.timedelta64(1,'s')), color='#00FF00', linewidth=1)  
+        plt.axvline((visible_data['synced_time'][-1] / np.timedelta64(1,'s')), color='#00FF00', linewidth=2)  
+        """
+        # REMOVE THE HACK BELOW HERE!
+        
+        STIM_LIST = [[0,1],[4,5],[8,9],[12,13],[16,17],[20,21],[24,25],[28,29],[32,33],[36,37]]
+        for ons, offs in STIM_LIST:
+            ax.axvspan(ons, offs,  facecolor='red', linewidth=0, edgecolor=None, alpha=0.3, zorder=10)
+        
+        """
         laser_1 = collections.BrokenBarHCollection.span_where((axis_data.synced_time.values/ np.timedelta64(1,'s')), 
                     ymin=0.85*(min(axis_data[measurement].dropna())),ymax=1.15*(max(axis_data[measurement].dropna())), 
-                    where=axis_data['Laser1_state'] > 0, facecolor='k', edgecolor=None,
+                    where=axis_data['Laser1_state'] > 0.0, facecolor='k', edgecolor=None,
                     alpha=0.1, zorder=10) #green b2ffb2
         ax.add_collection(laser_1)
         
+
         laser_2 = collections.BrokenBarHCollection.span_where((axis_data.synced_time.values/ np.timedelta64(1,'s')), 
                     ymin=0.85*(min(axis_data[measurement].dropna())),ymax=1.15*(max(axis_data[measurement].dropna())), 
-                    where=axis_data['Laser2_state'] > 0, facecolor='r', 
-                    edgecolor='r', alpha=0.1, zorder=11) #green b2ffb2
+                    where=axis_data['Laser2_state'] > 0.0, facecolor='r', 
+                    edgecolor='r', alpha=0.2, zorder=11) #green b2ffb2
         ax.add_collection(laser_2)
         
         

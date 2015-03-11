@@ -118,7 +118,7 @@ def sync_jaaba_with_ros(FMF_DIR):
     
     jaaba_data['Timestamp'] = jaaba_data.index #silly pandas bug for subtracting from datetimeindex...
     try:
-        jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data.Timestamp[(jaaba_data.Laser2_state + jaaba_data.Laser1_state) > 0].index[0]
+        jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data.Timestamp[(jaaba_data.Laser2_state + jaaba_data.Laser1_state) > 0.001].index[0]
     except:
         print "WARNING:   Cannot synchronize by stimulus. Setting T0 to frame0. "
         jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data.Timestamp.index[0]
@@ -222,7 +222,7 @@ def plot_data(means, sems, ns, measurement):
         laser_x = []
         for w in means.ix[x].index:
             laser_x.append((w-pd.to_datetime(0)).total_seconds())
-            if ns.ix[x]['FlyID'][w] >= ((max_n)-1): #(max_n/3):
+            if ns.ix[x]['FlyID'][w] >= ((max_n)-2): #(max_n/3):
                 #print ns.ix[x]['FlyID'][w]
                 x_values.append((w-pd.to_datetime(0)).total_seconds())
                 y_values.append(means.ix[x,w][measurement])
@@ -248,7 +248,7 @@ def plot_data(means, sems, ns, measurement):
                             )
         group_number += 1
     ax.set_xlim((np.amin(x_values),np.amax(x_values)))
-    ax.set_ylim(0.85*(means[measurement].min()),1.15*(means[measurement].max()))
+    ax.set_ylim(0.85*(np.amin(y_values)),1.15*(np.amax(y_values)))
     if 'maxWingAngle' in measurement:
         ax.set_ylabel('Mean maximum wing angle (rad)' + ' ' + u"\u00B1" + ' SEM', fontsize=16)   # +/- sign is u"\u00B1"
     elif 'dtarget' in measurement:
@@ -298,9 +298,9 @@ if __name__ == "__main__":
                             help='integer and unit, such as "5s" or "4Min" or "500ms"')
     parser.add_argument('--experiment', type=str, required=False,
                             help='handle to select experiment from group (example: IRR-)')
-    parser.add_argument('--threshold', type=str, required=False, default=0.000, 
+    parser.add_argument('--threshold', type=str, required=False, default="0-1-0", 
                             help='list threshold boundaries and threshold, delimited by -. ex: 60-120-0.5   =   minimum 0.5 WEI between 60s and 120s.')
-    parser.add_argument('--pool_controls', type=str,  required=False, default = '',
+    parser.add_argument('--pool_controls', type=str,  required=False, default = "",
                             help="list exact strings of control genotypes delimited by comma ex: DB204-GP-IRR,DB202-GP-IRR")
     parser.add_argument('--pool_experiment', type=str,  required=False, default = '',
                             help="list exact strings of experimental genotypes delimited by comma ex: DB204-GP-IRR,DB202-GP-IRR")
@@ -318,7 +318,7 @@ if __name__ == "__main__":
 
     binsize = (args.binsize)
     print "BINSIZE: ", binsize
-    colourlist = ['#008000','#0032FF','r','c','m','y', '#000000']
+    colourlist = ['m', 'c', '#008000','#0032FF','r','c','m','y', '#000000']
 
     #filename = '/tier2/dickson/bathd/FlyMAD/JAABA_tracking/140927/wing_angles_nano.csv'
     #binsize = '5s'  # ex: '1s' or '4Min' etc
@@ -363,8 +363,8 @@ if __name__ == "__main__":
     ns = pd.read_pickle(JAABA + 'JAR/' + HANDLE + '_n_' + binsize + '.pickle')
 
     plot_data(means, sems, ns, 'maxWingAngle')    
-    plot_data(means, sems, ns, 'Length')
-    plot_data(means, sems, ns, 'Width')
+    #plot_data(means, sems, ns, 'Length')
+    #plot_data(means, sems, ns, 'Width')
     plot_data(means, sems, ns, 'dtarget')
 
 

@@ -20,16 +20,18 @@ _left_bound = -30  #plots 30 seconds before stim
 
 _right_bound = 200 #plots 200 seconds after stim onset.
 
-
+FPS = 15
 
 def make_panel(flyInstance, row, column, _frame_number):
 
         ax1 = plt.subplot2grid((12,10), (0,0), colspan=10, rowspan=10)
         
         fig.add_axes(ax1)
-        frame,timestamp = flyInstance.get_frame((_frame_number + flyInstance._Tzero - 150))     #1800 starts @-10sec
+        frame,timestamp = flyInstance.get_frame((_frame_number))# TEMPORARY + flyInstance._Tzero - 150))     #1800 starts @-10sec
         
         jaaba_datum = flyInstance._data[flyInstance._data['Timestamp'] == pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern')]
+        
+        #flyInstance.set_overlays(overlays_value)
         
         flyInstance.plot_zoom(frame, timestamp, cm.Greys_r, jaaba_datum, ax1)
         
@@ -62,15 +64,17 @@ if __name__ == "__main__":
                         help='path to wide fmf') 
     parser.add_argument('--savedir', type=str, required=True,
                         help='path to save directory') 
+    parser.add_argument('--overlays', type=bool, required=False, default=False, help='turn on overlays to plot wing angles and distance bars')
     args = parser.parse_args()
     
     zoom_fmf = args.zoom
     wide_fmf = args.wide
     savedir = args.savedir  
+    overlays_value = args.overlays
     
     #os.system(ffmpeg -f image2 -r 15 -i _tmp%05d.png -vcodec mpeg4 -y (_VIDEO_DIR + '/flymad_annotated.mp4'))
 
-    vid = data_movies.FlyPanel(zoom_fmf, savedir, utilities.parse_fmftime(zoom_fmf)[0])
+    vid = data_movies.FlyPanel(zoom_fmf, savedir, utilities.parse_fmftime(zoom_fmf)[0], overlays_value)
     
     
     
@@ -78,7 +82,7 @@ if __name__ == "__main__":
     
     image_width = vid.get_frame(0)[0].shape[1]
     
-    for frame_number in range(4000):
+    for frame_number in range(8000):
                 
         if os.path.exists(savedir + '/temp_png/_tmp%05d.png'%(frame_number)):
             continue
