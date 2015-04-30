@@ -127,7 +127,7 @@ def sync_jaaba_with_ros(FMF_DIR):
 
     ###    WING EXTENSION    ###
     jaaba_data['maxWingAngle'] = get_absmax(jaaba_data[['Left','Right']])
-    jaaba_data[jaaba_data['maxWingAngle'] > 1.57] = np.nan
+    jaaba_data[jaaba_data['maxWingAngle'] > 2.1] = np.nan
     
     ### ABDOMINAL BENDING   ###
     jaaba_data[jaaba_data['Length'] > 110] = np.nan  #discard frames with bogus length.  *************
@@ -137,12 +137,33 @@ def sync_jaaba_with_ros(FMF_DIR):
     trace.savefig(JAABA + 'TRACES/' + FLY_ID + '.png')
     plt.close('all')
     
+    ###FIRST COURTSHIP BOUT AFTER STIMULUS###
+    
+    #courted, latency = latency_measures(jaaba_data)
+    
+    
     if 'binsize' in globals():
         jaaba_data = bin_data(jaaba_data, binsize)
         jaaba_data.to_pickle(JAABA + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle')
     else:
-        return jaaba_data
+        return jaaba_data, courted, latency
     
+def latency_measures(jaaba_data): #takes input from unbinned jaaba_data (during sync...)
+      poststim = jaaba_data[(jaaba_data.index > jaaba_data[(jaaba_data.Laser2_state + jaaba_data.Laser1_state) > 0.001].index[-1])]
+      courting = poststim[(poststim.maxWingAngle >= 0.523598776)  & (poststim.dtarget <= 50 )]
+      try: 
+        latency = (courting.index[0] - poststim.index[0]).total_seconds()
+        courted = 1
+      except:
+        courted = 0
+        latency = (poststim.index[-1] - poststim.index[0]).total_seconds()
+      return courted, latency
+      
+      
+def plot_latency_to_courtship(list_of_latencies):
+    df = DataFrame(list_of_latencies, columns=['genotype', 'latency'])
+    means = df.groupby('genotype').mean()
+    fig = plt.figure()
     
     
 def gather_data(filelist):
@@ -198,7 +219,7 @@ def plot_single_trace(jaaba_data):
         ax = fig.add_subplot(len(measurements), 1,(m+1))
         y_values = jaaba_data[measurements[m]]
         p = plt.plot(x_values, y_values, linewidth=2, zorder=100)
-        laser_1 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(y_values.min()), ymax=1.3*(y_values.max()), where=jaaba_data['Laser1_state'] > 0, facecolor='k', alpha=0.2, zorder=10) #green b2ffb2
+        laser_1 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(y_values.min()), ymax=1.3*(y_values.max()), where=jaaba_data['Laser1_state'] > 0, facecolor='k', edgecolor='k', alpha=0.2, zorder=10) #green b2ffb2
         ax.add_collection(laser_1)
         laser_2 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(min(y_values)), ymax=1.3*(max(y_values)), where=jaaba_data['Laser2_state'] > 0, facecolor='r', edgecolor='r', alpha=0.1, zorder=11) #green b2ffb2
         ax.add_collection(laser_2)
@@ -213,6 +234,7 @@ def plot_data(means, sems, ns, measurement):
     fig = plt.figure()
     group_number = 0
     ax = fig.add_subplot(1,1,1)
+    y_range = []
     for x in means.index.levels[0]:
         max_n = ns.ix[x]['FlyID'].max()
         x_values = []
@@ -222,7 +244,7 @@ def plot_data(means, sems, ns, measurement):
         laser_x = []
         for w in means.ix[x].index:
             laser_x.append((w-pd.to_datetime(0)).total_seconds())
-            if ns.ix[x]['FlyID'][w] >= ((max_n)-2): #(max_n/3):
+            if ns.ix[x]['FlyID'][w] >= ((max_n)/4): #(max_n/3):
                 #print ns.ix[x]['FlyID'][w]
                 x_values.append((w-pd.to_datetime(0)).total_seconds())
                 y_values.append(means.ix[x,w][measurement])
@@ -232,6 +254,8 @@ def plot_data(means, sems, ns, measurement):
         #y_values = list(means.ix[x][measurement])
         #psems = list(sems.ix[x][measurement])
         #nsems = list(-1*(sems.ix[x][measurement]))
+        y_range.append(np.amin(y_values))
+        y_range.append(np.amax(y_values))
         top_errbar = tuple(map(sum, zip(psems, y_values)))
         bottom_errbar = tuple(map(sum, zip(nsems, y_values)))
         p = plt.plot(x_values, y_values, linewidth=3, zorder=100,
@@ -248,7 +272,7 @@ def plot_data(means, sems, ns, measurement):
                             )
         group_number += 1
     ax.set_xlim((np.amin(x_values),np.amax(x_values)))
-    ax.set_ylim(0.85*(np.amin(y_values)),1.15*(np.amax(y_values)))
+    ax.set_ylim(0.85*(np.amin(y_range)),1.15*(np.amax(y_range)))
     if 'maxWingAngle' in measurement:
         ax.set_ylabel('Mean maximum wing angle (rad)' + ' ' + u"\u00B1" + ' SEM', fontsize=16)   # +/- sign is u"\u00B1"
     elif 'dtarget' in measurement:
@@ -304,6 +328,8 @@ if __name__ == "__main__":
                             help="list exact strings of control genotypes delimited by comma ex: DB204-GP-IRR,DB202-GP-IRR")
     parser.add_argument('--pool_experiment', type=str,  required=False, default = '',
                             help="list exact strings of experimental genotypes delimited by comma ex: DB204-GP-IRR,DB202-GP-IRR")
+    parser.add_argument('--compile_folders', type=str, required=False, default = False, 
+                            help="Make True if you want to analyze data from copies of pickled data")
         
     args = parser.parse_args()
 
@@ -315,41 +341,51 @@ if __name__ == "__main__":
     POOL_CONTROL = [str(item) for item in args.pool_controls.split(',')]
     POOL_EXP = [str(item) for item in args.pool_experiment.split(',')]
     #OUTPUT = args.outputdir
+    COMPILE_FOLDERS = args.compile_folders
 
     binsize = (args.binsize)
     print "BINSIZE: ", binsize
-    colourlist = ['m', 'c', '#008000','#0032FF','r','c','m','y', '#000000']
+    colourlist = ['#333333','#0033CC',  '#AAAAAA','#0032FF','r','c','m','y', '#000000']
 
     #filename = '/tier2/dickson/bathd/FlyMAD/JAABA_tracking/140927/wing_angles_nano.csv'
     #binsize = '5s'  # ex: '1s' or '4Min' etc
     #BAG_FILE = '/groups/dickson/home/bathd/Dropbox/140927_flymad_rosbag_copy/rosbagOut_2014-09-27-14-53-54.bag'
-    baglist = []
-    for bag in glob.glob(BAGS + '/*.bag'):
-        bagtimestamp = parse_bagtime(bag)
-        baglist.append((bag, bagtimestamp))
-    bagframe = DataFrame(baglist, columns=['Filepath', 'Timestamp'])
-    bagframe.index = pd.to_datetime(bagframe['Timestamp'])
-    bagframe = bagframe.sort()
-    bagframe.to_csv(BAGS + '/list_of_bags.csv', sep=',')
 
-    if not os.path.exists(JAABA + 'JAR') ==True:
-        print "MAKING A JAR"
-        os.makedirs(JAABA + 'JAR')
-    if not os.path.exists(JAABA + 'TRACES') ==True:
-        os.makedirs(JAABA + 'TRACES')
-        
-    updated = False
 
-    for directory in glob.glob(JAABA + '*' + HANDLE + '*' + '*zoom*'):
-        FLY_ID, FMF_TIME, GROUP = parse_fmftime(directory)
-        if not os.path.exists(JAABA + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle') ==True:
-            sync_jaaba_with_ros(directory)
-            updated = True
+    if COMPILE_FOLDERS == False:
+        baglist = []
+        for bag in glob.glob(BAGS + '/*.bag'):
+            bagtimestamp = parse_bagtime(bag)
+            baglist.append((bag, bagtimestamp))
+        bagframe = DataFrame(baglist, columns=['Filepath', 'Timestamp'])
+        bagframe.index = pd.to_datetime(bagframe['Timestamp'])
+        bagframe = bagframe.sort()
+        bagframe.to_csv(BAGS + '/list_of_bags.csv', sep=',')
+
+        if not os.path.exists(JAABA + 'JAR') ==True:
+            print "MAKING A JAR"
+            os.makedirs(JAABA + 'JAR')
+        if not os.path.exists(JAABA + 'TRACES') ==True:
+            os.makedirs(JAABA + 'TRACES')
             
-    if updated == True:
-        print 'Found unprocessed files for the chosen bin. Compiling data...'
+        updated = False
+
+        for directory in glob.glob(JAABA + '*' + HANDLE + '*' + '*zoom*'):
+            FLY_ID, FMF_TIME, GROUP = parse_fmftime(directory)
+            if not os.path.exists(JAABA + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle') ==True:
+                sync_jaaba_with_ros(directory)
+                updated = True
+                
+        if updated == True:
+            print 'Found unprocessed files for the chosen bin. Compiling data...'
+            
+
     gather_data(glob.glob(JAABA + 'JAR/*' + HANDLE + '*' + binsize + '_fly.pickle'))
+    
     means, sems, ns = group_data(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
+        
+        
+        
     """
     if not os.path.exists(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle') ==True:
         gather_data(glob.glob(JAABA + 'JAR/*' + HANDLE + '*' + binsize + '_fly.pickle'))
