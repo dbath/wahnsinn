@@ -139,12 +139,18 @@ class TargetDetector(object):
             x = int(np.rint(positions.fly_x[ts]))
             y = int(np.rint(positions.fly_y[ts]))
             d = int(np.rint(distances.dtarget[ts]))
-            if d > 255:
-                dblue = 255
-            else:
-                dblue = d
             
-            cv2.circle(im, (x,y), 1, (dblue, 0, (255-dblue)), -1)
+            fraction = (float(ts)/len(positions))
+            if fraction <= 0.5:
+                red = 255.0*2*(fraction)
+                green = 255.0*2*(fraction)
+                blue = 255.0
+            if fraction > 0.5:
+                red = 255.0
+                green = 255.0 - 255.0*2*(fraction - 0.5)
+                blue = 255.0 - 255.0*2*(fraction - 0.5)
+            
+            cv2.circle(im, (x,y), 1, (blue, green, red), -1)
         cv2.imshow('traj', im)
         cv2.imwrite((self._tempdir + 'trajectory.png'), im)
         cv2.destroyAllWindows() 
