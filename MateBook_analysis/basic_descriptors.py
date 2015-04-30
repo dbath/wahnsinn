@@ -13,9 +13,9 @@ from scipy import stats as st
 
 DROP = '/groups/dickson/home/bathd/Desktop/DROP/'   #Location of behavior.tsv and filenames.csv files
 
-CONTROL_GENOTYPE = '\+ / UAS-TNTE'
+CONTROL_GENOTYPE = '\+'
 
-CONTROL_TREATMENT = 'OE16MM'
+CONTROL_TREATMENT = 'acetone'
 
 groupinglist = ['Tester',
                 'Target',
@@ -35,7 +35,7 @@ MMparamlist = ['courtship',
             'wingExt (1)'
             ]
             
-paramlist = MFparamlist
+paramlist = MMparamlist
 
 INDEX_NAME = ['Courtship Index',
               'Courting Index',
@@ -45,8 +45,8 @@ INDEX_NAME = ['Courtship Index',
               ]
               
 #colourlist = ['#1A1A1A','#5F5F5F', '#0033CC',  'c', 'm', 'y','Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed', 'DarkGreen', 'DarkBlue', 'CornflowerBlue']
-#colourlist = ['#333333', '#6685E0','#0033CC', '#66C266', '#009900']
-colourlist = ['#333333', '#CC80E6','#9900CC', '#009900', '#0033CC']
+colourlist = ['#333333', '#66C266', '#009900', '#6685E0','#0033CC']
+#colourlist = ['#333333', '#CC80E6','#9900CC', '#009900', '#0033CC']
 #colourlist = ['#000000','#0000FF', '#FF0000',  '#8EC8FF', '#999999' ,'#FF9966']
 
 LINE_STYLE_LIST = ['-', '--', '-.', ':']
@@ -169,7 +169,8 @@ for i in paramlist:
     ax.spines['top'].set_visible(False)
     ax.yaxis.set_ticks_position('left')
     ax.xaxis.set_ticks_position('bottom')
-    ax.legend(loc='upper right', shadow=False, fontsize=6)
+    if (paramlist.index(i) == 0):
+        ax.legend(loc='upper right', shadow=False, fontsize=6)
 
 
 plt.show()

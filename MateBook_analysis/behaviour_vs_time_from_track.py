@@ -59,9 +59,9 @@ _filefile.index.name = 'Video'
 
 
 
-CONTROL_GENOTYPE = '\+ / UAS-TNTE'
+CONTROL_GENOTYPE = '\+ / UAS-CHRIMSON'
 
-CONTROL_TREATMENT = 'OE16'
+CONTROL_TREATMENT = 'MF'
 
 groupinglist = ['Tester',
                 'Target'
@@ -98,7 +98,8 @@ INDEX_NAME = ['Courtship Index',
               
 #colourlist = [ 'c', 'm','b', 'r', 'y','g', 'k', 'DarkGreen', 'DarkBlue', 'Orange', 'LightSlateGray', 'Indigo', 'GoldenRod', 'DarkRed',   'CornflowerBlue']
 #colourlist = ['#333333', '#66C266', '#009900', '#6685E0','#0033CC']
-colourlist = ['#333333', '#CC80E6','#9900CC', '#009900', '#0033CC']
+#colourlist = ['#333333', '#CC80E6','#9900CC', '#009900', '#0033CC']
+colourlist = ['#333333', '#66C266', '#009900', '#6685E0','#0033CC']
 #colourlist = ['#000000','#0000FF', '#FF0000',  '#8EC8FF', '#999999' ,'#FF9966']
 #colourlist = ['#008000','#0032FF','#000000','r','c','m','y']
 
@@ -137,31 +138,30 @@ def parse_filename(path):
 
     
 
-def process_data(directory, paramlist):
-    for filename in find_files(directory, 'track.tsv'):
-        fi = pd.read_table(filename, sep='\t', header = [0,1], skiprows=[2,3])
-        tempdf = DataFrame(index = fi.index)
-        vidname, flyID = parse_filename(filename)
-        tag = vidname + "_" + flyID
-        if fi['Unnamed: 8_level_0', 'isMissegmented'].mean() >= 0.2:
-            print "arena dropped for poor quality: ", tag
-            continue
-        elif fi['Unnamed: 8_level_0', 'isMissegmented'].mean() == 0.0:
-            print "arena dropped because quality = 1: ", tag
-            continue
-        elif len(set(fi['Unnamed: 3_level_0', 'courtship'])) <=1:
-            print "arena dropped because courtship = nan: ", tag
-            continue
-        else:
-            for j in paramlist:
-                tempdf[j[1]] = fi[j[0],j[1]]
-                if 'movedAbs_u' in j:
-                    tempdf[j[1]] = tempdf[j[1]] * FPS
-                if 'copulating' not in j:
-                    pass#tempdf[j[1]][fi['0', 'copulating'] == 1] = np.nan
-        tempdf['Time'] = tempdf.index/FPS
-        tempdf.to_pickle(JAR + tag + '_tempdf.pickle')
-        print ".....", tag, "processed to pickling."
+def process_data(filename, paramlist):
+    fi = pd.read_table(filename, sep='\t', header = [0,1], skiprows=[2,3])
+    tempdf = DataFrame(index = fi.index)
+    vidname, flyID = parse_filename(filename)
+    tag = vidname + "_" + flyID
+    if fi['Unnamed: 8_level_0', 'isMissegmented'].mean() >= 0.2:
+        print "arena dropped for poor quality: ", tag
+        return
+    elif fi['Unnamed: 8_level_0', 'isMissegmented'].mean() == 0.0:
+        print "arena dropped because quality = 1: ", tag
+        return
+    elif len(set(fi['Unnamed: 3_level_0', 'courtship'])) <=1:
+        print "arena dropped because courtship = nan: ", tag
+        return
+    else:
+        for j in paramlist:
+            tempdf[j[1]] = fi[j[0],j[1]]
+            if 'movedAbs_u' in j:
+                tempdf[j[1]] = tempdf[j[1]] * FPS
+            if 'copulating' not in j:
+                pass#tempdf[j[1]][fi['0', 'copulating'] == 1] = np.nan
+    tempdf['Time'] = tempdf.index/FPS
+    tempdf.to_pickle(JAR + tag + '_tempdf.pickle')
+    print ".....", tag, "processed to pickling."
     return 
 
 def retrieve_data(filename):
@@ -335,16 +335,19 @@ elif os.path.isfile(JAR+ 'rawfile.pickle') == True:
     print "Using pickled rawfile."
     rawfile = retrieve_data(JAR + 'rawfile.pickle')
     mean, sem, n = group_data(rawfile, _filefile)
-elif (len(processed_filelist) < 1):
+
+else:
     print "Processing data from scratch"
-    process_data(_DROP, _paramlist)
+    for directory in total_filelist:
+        VIDNAME, FLY_ID = parse_filename(directory)
+        if not os.path.exists(JAR + VIDNAME + "_" + FLY_ID + '_tempdf.pickle') ==True:
+           process_data(directory, _paramlist)
+           updated = True
+    
+    
     rawfile = compile_data(glob.glob(JAR + '*tempdf.pickle'))
     mean, sem, n = group_data(rawfile, _filefile)
 
-else: 
-    print "Using pickled tempdf files."    
-    rawfile = compile_data(processed_filelist)
-    mean, sem, n = group_data(rawfile, _filefile)
 
 
 list_of_treatments = set((_filefile[groupinglist[1]][_filefile[groupinglist[1]].notnull()]))

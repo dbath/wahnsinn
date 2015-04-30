@@ -89,8 +89,9 @@ if args.assay == 'M':
     _paramlist = Mparamlist
     INDEX_NAME = INDEX_SINGLES
     __STIM_LIST = [[30,35], [40,45],[50,55],[60,65],[70,75],[80,85],[90,95],[100,105],[110,115],[120,125],[130,135], [140,145],[150,155],[160,165],[170,175]]
-    STIM_LIST = [[60,70],[80,90],[100,110],[120,130],[140,150],[160,170],[180,190],[200,210],[220,230],[240,250],[260,270],[280,290],
+    _STIM_LIST = [[60,70],[80,90],[100,110],[120,130],[140,150],[160,170],[180,190],[200,210],[220,230],[240,250],[260,270],[280,290],
                 [300,330],[360,390],[420,450],[480,510],[540,570],[600,630],[660,690],[720,750],[780,810],[840,870]]
+    STIM_LIST = []
 if args.assay == 'MF':
     _paramlist = MFparamlist
     INDEX_NAME = INDEX_PAIRS 
@@ -98,7 +99,8 @@ if args.assay == 'MF':
 if args.assay == 'MM':
     _paramlist = MMparamlist
     INDEX_NAME = INDEX_PAIRS
-    STIM_LIST = [[120,180],[360,420]] 
+    _STIM_LIST = [[120,180],[360,420]] 
+    STIM_LIST = []
     
 params = []
 for a,b in _paramlist:
@@ -125,7 +127,7 @@ def parse_filename(path):
     return vidname, flyID
 
 def parse_screen_filename(path):
-    exp_id = path.split('/')[-1].split('_')[0]
+    exp_id = path.split('/')[-1].split('.')[0]#.split('_')[0]
     return exp_id
     
 
@@ -262,7 +264,9 @@ def plot_from_track(mean, sem, n, exp_id, storage_location, timestamp):#, p_vals
 
 experiment_list=[]
 for x in glob.glob(INPUT_DIR + '*.mbr'):
+    
     exp_id = parse_screen_filename(x)
+    print exp_id
     if exp_id in experiment_list:
         continue
     else:
