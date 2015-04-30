@@ -28,7 +28,7 @@ def make_panel(flyInstance, row, column, _frame_number):
         ax1 = plt.subplot2grid((60,6), (row,0), colspan=2, rowspan=30)
         
         fig.add_axes(ax1)
-        frame,timestamp = flyInstance.get_frame((_frame_number + flyInstance._Tzero + 1125))     #1800 starts @120sec
+        frame,timestamp = flyInstance.get_frame((_frame_number + flyInstance._Tzero + 1650))     #1800 starts @120sec
         
         jaaba_datum = flyInstance._data[flyInstance._data['Timestamp'] == pd.to_datetime(timestamp, unit='s').tz_localize('UTC').tz_convert('US/Eastern')]
         flyInstance.plot_zoom(frame, timestamp, cm.Greys_r, jaaba_datum, ax1)
@@ -75,18 +75,7 @@ if __name__ == "__main__":
     image_height = ctrlfly.get_frame(0)[0].shape[0] + expfly.get_frame(0)[0].shape[0]
     
     image_width = expfly.get_frame(0)[0].shape[1] *3
-    for frame_number in range(1875):#ctrlfly.get_n_frames()):
-           
-        if os.path.exists(savedir + '/temp_png/_tmp%05d.png'%(frame_number)):
-            continue
-        fig = plt.figure(figsize=(image_width/100, image_height/100), dpi=200.399 )
-           
-        make_panel(ctrlfly, 0, 0, frame_number)
-        make_panel(expfly, 30, 0, frame_number) 
-        plt.savefig(savedir + '/temp_png/_tmp%05d.png'%(frame_number), bbox_inches='tight', pad_inches=0)
-        plt.close('all')  
-        print 'added png: ', frame_number
-    for frame_number in range(3225,3500):#ctrlfly.get_n_frames()):
+    for frame_number in range(1350):#ctrlfly.get_n_frames()):
            
         if os.path.exists(savedir + '/temp_png/_tmp%05d.png'%(frame_number)):
             continue
@@ -98,13 +87,15 @@ if __name__ == "__main__":
         plt.close('all')  
         print 'added png: ', frame_number
 
+
     utilities.sendMail('bathd@janelia.hhmi.org','movie is finished', ('Your awesome new video has finished.'))
     
     
     
     """
     
-    ffmpeg -f image2 -r 15 -i _tmp%05d.png -vf 'scale=iw/2:-1' -vcodec yuv420p -b 8000k -y '/media/DBATH_6/150226/movie.mp4'
+    ffmpeg -f image2 -r 15 -i temp_png/_tmp%05d.png -vf 'scale=iw/2:-1' -vcodec mpeg4 -b 8000k -y 'movie.mp4'
+
 
 
 """
