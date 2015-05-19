@@ -106,6 +106,7 @@ def sync_jaaba_with_ros(FMF_DIR):
     jaaba_data = convert_timestamps(jaaba_data)
 
     # ALIGN LASER STATE DATA
+    jaaba_data['Laser0_state'] = binarize_laser_data(BAG_FILE, 'laser0')['Laser_state'].asof(jaaba_data.index).fillna(value=0)
     jaaba_data['Laser1_state'] = binarize_laser_data(BAG_FILE, 'laser1')['Laser_state'].asof(jaaba_data.index).fillna(value=0)  #YAY! 
     jaaba_data['Laser2_state'] = binarize_laser_data(BAG_FILE, 'laser2')['Laser_state'].asof(jaaba_data.index).fillna(value=0)
     
@@ -169,6 +170,7 @@ def plot_latency_to_courtship(list_of_latencies):
 def gather_data(filelist):
     datadf = DataFrame()
     for x in filelist:
+        print x
         FLY_ID = x.split('/')[-1].split('_fly.')[0]
         EXP_ID, DATE, TIME = FLY_ID.split('_', 4)[0:3]
         fx = pd.read_pickle(x)
@@ -219,8 +221,14 @@ def plot_single_trace(jaaba_data):
         ax = fig.add_subplot(len(measurements), 1,(m+1))
         y_values = jaaba_data[measurements[m]]
         p = plt.plot(x_values, y_values, linewidth=2, zorder=100)
+        
+        if args.plot_ambient=True:
+            laser_0 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(y_values.min()), ymax=1.3*(y_values.max()), where=jaaba_data['Laser0_state'] == 0, facecolor='k', edgecolor='k', alpha=0.6, zorder=10) #green b2ffb2
+            ax.add_collection(laser_0)
+            
         laser_1 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(y_values.min()), ymax=1.3*(y_values.max()), where=jaaba_data['Laser1_state'] > 0, facecolor='k', edgecolor='k', alpha=0.2, zorder=10) #green b2ffb2
         ax.add_collection(laser_1)
+        
         laser_2 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(min(y_values)), ymax=1.3*(max(y_values)), where=jaaba_data['Laser2_state'] > 0, facecolor='r', edgecolor='r', alpha=0.1, zorder=11) #green b2ffb2
         ax.add_collection(laser_2)
        
@@ -281,7 +289,12 @@ def plot_data(means, sems, ns, measurement):
     else:
         ax.set_ylabel('Mean ' + measurement  + ' ' + u"\u00B1" + ' SEM', fontsize=16)
         
-    ax.set_xlabel('Time (s)', fontsize=16)
+    ax.set_xlabel('Time (s)', fontsize=16)      
+      
+    if args.plot_ambient=True:
+        laser_0 = collections.BrokenBarHCollection.span_where(laser_x, ymin=0.85*(means[measurement].min()), ymax=1.15*(means[measurement].max()), where=jaaba_data['Laser0_state'] == 0, facecolor='k', edgecolor='#BBBBBB', linewidth=0, edgecolor=None, alpha=1.0, zorder=10)
+        ax.add_collection(laser_0)
+        
     laser_1 = collections.BrokenBarHCollection.span_where(laser_x, ymin=0.85*(means[measurement].min()), ymax=1.15*(means[measurement].max()), where=means['Laser1_state'] > 0.1, facecolor='#DCDCDC', linewidth=0, edgecolor=None, alpha=1.0, zorder=10) #green b2ffb2
     ax.add_collection(laser_1)
     laser_2 = collections.BrokenBarHCollection.span_where(laser_x, ymin=0.85*(means[measurement].min()), ymax=1.15*(means[measurement].max()), where=means['Laser2_state'] > 0.1, facecolor='#FFB2B2', linewidth=0, edgecolor=None, alpha=1.0, zorder=10) #red FFB2B2
@@ -322,7 +335,7 @@ if __name__ == "__main__":
                             help='integer and unit, such as "5s" or "4Min" or "500ms"')
     parser.add_argument('--experiment', type=str, required=False,
                             help='handle to select experiment from group (example: IRR-)')
-    parser.add_argument('--threshold', type=str, required=False, default="0-1-0", 
+    parser.add_argument('--threshold', type=str, required=False, default="0-100-0", 
                             help='list threshold boundaries and threshold, delimited by -. ex: 60-120-0.5   =   minimum 0.5 WEI between 60s and 120s.')
     parser.add_argument('--pool_controls', type=str,  required=False, default = "",
                             help="list exact strings of control genotypes delimited by comma ex: DB204-GP-IRR,DB202-GP-IRR")
@@ -330,6 +343,8 @@ if __name__ == "__main__":
                             help="list exact strings of experimental genotypes delimited by comma ex: DB204-GP-IRR,DB202-GP-IRR")
     parser.add_argument('--compile_folders', type=str, required=False, default = False, 
                             help="Make True if you want to analyze data from copies of pickled data")
+    parser.add_argument('--plot_ambient', type=str, required=False, default = False, 
+                            help="Make True if you want to plot the absence of ambient light from laser0.")
         
     args = parser.parse_args()
 
