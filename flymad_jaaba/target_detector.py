@@ -5,6 +5,7 @@ import sys, os
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from pylab import *
 import motmot.FlyMovieFormat.FlyMovieFormat as FMF
 import pandas as pd
 from pandas import DataFrame
@@ -155,6 +156,26 @@ class TargetDetector(object):
         cv2.imwrite((self._tempdir + 'trajectory.png'), im)
         cv2.destroyAllWindows() 
     
+    def plot_trajectory_and_wingext(self, WING_DF, BAG_FILE):#, TS_START, TS_END):
+        """ Plots trajectory with wing angle indicated in colourmap. 
+            Give start and end timestamps to limit trajectory to a section of the experiment.
+        """
+        im = cv2.imread(self._tempdir + 'background.png')
+    
+        fig = gcf()
+        ax = fig.gca(frameon=False)
+        s = ax.scatter(WING_DF.fly_x,WING_DF.fly_y, c=WING_DF.maxWingAngle, zorder=1, s=5, linewidths=0 ) 
+        plt.imshow(im, zorder=0)
+        plt.axis('off')
+        cbaxes = fig.add_axes([0.9,0.2,0.025,0.60])
+        cbar = plt.colorbar(s, cax = cbaxes, vmin=0.0, vmax=2.1)
+        cbar.set_label("Wing Extension Angle (rad)")
+        cbar.ax.tick_params(labelsize=10)
+        plt.setp(ax.get_yticklabels(), visible=False)
+        plt.setp(ax.get_xticklabels(), visible=False)
+        plt.savefig(self._tempdir + 'wingext_trajectory.png', bbox_inches='tight', pad_inches=0   )
+
+
     def get_targets(self):
         return self._targets
     

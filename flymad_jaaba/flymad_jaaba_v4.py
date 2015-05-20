@@ -106,14 +106,29 @@ def sync_jaaba_with_ros(FMF_DIR):
     jaaba_data = convert_timestamps(jaaba_data)
 
     # ALIGN LASER STATE DATA
-    jaaba_data['Laser0_state'] = binarize_laser_data(BAG_FILE, 'laser0')['Laser_state'].asof(jaaba_data.index).fillna(value=0)
-    jaaba_data['Laser1_state'] = binarize_laser_data(BAG_FILE, 'laser1')['Laser_state'].asof(jaaba_data.index).fillna(value=0)  #YAY! 
-    jaaba_data['Laser2_state'] = binarize_laser_data(BAG_FILE, 'laser2')['Laser_state'].asof(jaaba_data.index).fillna(value=0)
+    try:
+        jaaba_data['Laser0_state'] = binarize_laser_data(BAG_FILE, 'laser0')['Laser_state'].asof(jaaba_data.index).fillna(value=0)
+        jaaba_data['Laser1_state'] = binarize_laser_data(BAG_FILE, 'laser1')['Laser_state'].asof(jaaba_data.index).fillna(value=0)  #YAY! 
+        jaaba_data['Laser2_state'] = binarize_laser_data(BAG_FILE, 'laser2')['Laser_state'].asof(jaaba_data.index).fillna(value=0)
+    except:
+        print "\t ERROR: problem interpreting laser current values."
+        jaaba_data['Laser0_state'] = 0
+        jaaba_data['Laser2_state'] = 0
+        jaaba_data['Laser1_state'] = 0
+        
     
     # COMPUTE AND ALIGN DISTANCE TO NEAREST TARGET
     targets = target_detector.TargetDetector(WIDE_FMF, FMF_DIR)
     targets.plot_targets_on_background()
     targets.plot_trajectory_on_background(BAG_FILE)
+    
+    
+    positions = utilities.get_positions_from_bag(BAG_FILE)
+    positions = utilities.convert_timestamps(positions)
+    jaaba_data['fly_x'] = positions['fly_x'].asof(jaaba_data.index).fillna(value=0)
+    jaaba_data['fly_y'] = positions['fly_y'].asof(jaaba_data.index).fillna(value=0)
+    
+    
     jaaba_data['dtarget'] = targets.get_dist_to_nearest_target(BAG_FILE)['dtarget'].asof(jaaba_data.index).fillna(value=0)
     
     
@@ -129,6 +144,8 @@ def sync_jaaba_with_ros(FMF_DIR):
     ###    WING EXTENSION    ###
     jaaba_data['maxWingAngle'] = get_absmax(jaaba_data[['Left','Right']])
     jaaba_data[jaaba_data['maxWingAngle'] > 2.1] = np.nan
+    
+    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE)
     
     ### ABDOMINAL BENDING   ###
     jaaba_data[jaaba_data['Length'] > 110] = np.nan  #discard frames with bogus length.  *************
@@ -222,7 +239,7 @@ def plot_single_trace(jaaba_data):
         y_values = jaaba_data[measurements[m]]
         p = plt.plot(x_values, y_values, linewidth=2, zorder=100)
         
-        if args.plot_ambient=True:
+        if args.plot_ambient == True:
             laser_0 = collections.BrokenBarHCollection.span_where(x_values, ymin=0.85*(y_values.min()), ymax=1.3*(y_values.max()), where=jaaba_data['Laser0_state'] == 0, facecolor='k', edgecolor='k', alpha=0.6, zorder=10) #green b2ffb2
             ax.add_collection(laser_0)
             
@@ -291,8 +308,8 @@ def plot_data(means, sems, ns, measurement):
         
     ax.set_xlabel('Time (s)', fontsize=16)      
       
-    if args.plot_ambient=True:
-        laser_0 = collections.BrokenBarHCollection.span_where(laser_x, ymin=0.85*(means[measurement].min()), ymax=1.15*(means[measurement].max()), where=jaaba_data['Laser0_state'] == 0, facecolor='k', edgecolor='#BBBBBB', linewidth=0, edgecolor=None, alpha=1.0, zorder=10)
+    if args.plot_ambient == True:
+        laser_0 = collections.BrokenBarHCollection.span_where(laser_x, ymin=0.85*(means[measurement].min()), ymax=1.15*(means[measurement].max()), where=jaaba_data['Laser0_state'] == 0, facecolor='#BBBBBB', linewidth=0, edgecolor=None, alpha=1.0, zorder=10)
         ax.add_collection(laser_0)
         
     laser_1 = collections.BrokenBarHCollection.span_where(laser_x, ymin=0.85*(means[measurement].min()), ymax=1.15*(means[measurement].max()), where=means['Laser1_state'] > 0.1, facecolor='#DCDCDC', linewidth=0, edgecolor=None, alpha=1.0, zorder=10) #green b2ffb2
@@ -385,7 +402,7 @@ if __name__ == "__main__":
             
         updated = False
 
-        for directory in glob.glob(JAABA + '*' + HANDLE + '*' + '*zoom*'):
+        for directory in glob.glob(JAABA + '*zoom*'+ '*' + HANDLE + '*' ):
             FLY_ID, FMF_TIME, GROUP = parse_fmftime(directory)
             if not os.path.exists(JAABA + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle') ==True:
                 sync_jaaba_with_ros(directory)
