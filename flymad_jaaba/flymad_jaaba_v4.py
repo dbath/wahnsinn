@@ -106,10 +106,11 @@ def sync_jaaba_with_ros(FMF_DIR):
     jaaba_data = convert_timestamps(jaaba_data)
 
     # ALIGN LASER STATE DATA
+    laser_states = utilities.get_laser_states(BAG_FILE)
     try:
-        jaaba_data['Laser0_state'] = binarize_laser_data(BAG_FILE, 'laser0')['Laser_state'].asof(jaaba_data.index).fillna(value=0)
-        jaaba_data['Laser1_state'] = binarize_laser_data(BAG_FILE, 'laser1')['Laser_state'].asof(jaaba_data.index).fillna(value=0)  #YAY! 
-        jaaba_data['Laser2_state'] = binarize_laser_data(BAG_FILE, 'laser2')['Laser_state'].asof(jaaba_data.index).fillna(value=0)
+        jaaba_data['Laser0_state'] = laser_states['Laser0_state'].asof(jaaba_data.index).fillna(value=0)
+        jaaba_data['Laser1_state'] = laser_states['Laser1_state'].asof(jaaba_data.index).fillna(value=0)  #YAY! 
+        jaaba_data['Laser2_state'] = laser_states['Laser2_state'].asof(jaaba_data.index).fillna(value=0)
     except:
         print "\t ERROR: problem interpreting laser current values."
         jaaba_data['Laser0_state'] = 0
@@ -121,7 +122,6 @@ def sync_jaaba_with_ros(FMF_DIR):
     targets = target_detector.TargetDetector(WIDE_FMF, FMF_DIR)
     targets.plot_targets_on_background()
     targets.plot_trajectory_on_background(BAG_FILE)
-    
     
     positions = utilities.get_positions_from_bag(BAG_FILE)
     positions = utilities.convert_timestamps(positions)
@@ -143,8 +143,29 @@ def sync_jaaba_with_ros(FMF_DIR):
 
     ###    WING EXTENSION    ###
     jaaba_data['maxWingAngle'] = get_absmax(jaaba_data[['Left','Right']])
-    jaaba_data[jaaba_data['maxWingAngle'] > 2.1] = np.nan
+    #jaaba_data[jaaba_data['maxWingAngle'] > 3.1] = np.nan
+    """
+    BEGINNING = jaaba_data.Timestamp.index[0]
+    #FIRST_IR_ON = jaaba_data.Timestamp[((jaaba_data.Laser1_state > 0.001) & (jaaba_data.synced_time >= -1))].index[0]
+    FIRST_IR_ON = jaaba_data.Timestamp[jaaba_data.synced_time >= 0].index[0]
+    #FIRST_IR_OFF = jaaba_data.Timestamp[((jaaba_data.Laser1_state > 0.001) & (jaaba_data.synced_time <= 120))].index[-1]
+    FIRST_IR_OFF = jaaba_data.Timestamp[jaaba_data.synced_time >= 60000000000].index[0]
+    RED_ON = jaaba_data.Timestamp[jaaba_data.Laser2_state > 0.001].index[0]
+    RED_OFF = jaaba_data.Timestamp[jaaba_data.Laser2_state > 0.001].index[-1]
+    SECOND_IR_ON = jaaba_data.Timestamp[jaaba_data.synced_time >=320000000000].index[0]
+    #SECOND_IR_ON = jaaba_data.Timestamp[((jaaba_data.Laser1_state > 0.001) & (jaaba_data.synced_time >= 120))].index[0]
+    SECOND_IR_OFF = jaaba_data.Timestamp[jaaba_data.Laser1_state > 0.001].index[-1]
+    END = jaaba_data.Timestamp.index[-1]
     
+    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE)
+    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, BEGINNING, FIRST_IR_ON, '1-prestim')
+    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, FIRST_IR_ON, FIRST_IR_OFF, '2-IR1')
+    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, FIRST_IR_OFF, RED_ON, '3-post-IR1')
+    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, RED_ON,RED_OFF, '4-red')
+    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE,RED_OFF, SECOND_IR_ON,'5-post-red')
+    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE,SECOND_IR_ON,SECOND_IR_OFF,'6-IR2')
+    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE,SECOND_IR_OFF,END,'7-post-IR2')
+    """
     targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE)
     
     ### ABDOMINAL BENDING   ###
@@ -229,7 +250,7 @@ def group_data(raw_pickle):
 
 def plot_single_trace(jaaba_data):
     fig = plt.figure()
-    measurements = ['maxWingAngle', 'Length', 'Width', 'dtarget']
+    measurements = ['maxWingAngle', 'Left','Right','dtarget']
     x_values=[]
     for w in jaaba_data.index:
         x_values.append((w-pd.to_datetime(0)).total_seconds())
@@ -250,7 +271,7 @@ def plot_single_trace(jaaba_data):
         ax.add_collection(laser_2)
        
         ax.set_xlim((np.amin(x_values),np.amax(x_values)))
-        ax.set_ylim(0.85*(min(y_values)),1.15*(max(y_values)))
+        ax.set_ylim(0.85*(np.amin(y_values)),1.15*(np.amax(y_values)))
         ax.set_ylabel(measurements[m] , fontsize=12)
         ax.set_xlabel('Time (s)', fontsize=16)
     return fig
@@ -269,7 +290,7 @@ def plot_data(means, sems, ns, measurement):
         laser_x = []
         for w in means.ix[x].index:
             laser_x.append((w-pd.to_datetime(0)).total_seconds())
-            if ns.ix[x]['FlyID'][w] >= ((max_n)/4): #(max_n/3):
+            if ns.ix[x]['FlyID'][w] >= ((max_n)-2): #(max_n/3):
                 #print ns.ix[x]['FlyID'][w]
                 x_values.append((w-pd.to_datetime(0)).total_seconds())
                 y_values.append(means.ix[x,w][measurement])
@@ -402,7 +423,7 @@ if __name__ == "__main__":
             
         updated = False
 
-        for directory in glob.glob(JAABA + '*zoom*'+ '*' + HANDLE + '*' ):
+        for directory in glob.glob(JAABA + '*' + HANDLE + '*' + '*zoom*'):
             FLY_ID, FMF_TIME, GROUP = parse_fmftime(directory)
             if not os.path.exists(JAABA + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle') ==True:
                 sync_jaaba_with_ros(directory)

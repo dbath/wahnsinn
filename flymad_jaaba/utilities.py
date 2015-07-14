@@ -93,7 +93,32 @@ def binarize_laser_data(BAG_FILE, laser_number):
     laser_data['Laser_state'][laser_data['Laser_state'] == laser_number] = 1.0
     laser_data = convert_timestamps(laser_data)
     return laser_data
-
+    
+def get_laser_states(BAG_FILE):
+    bagfile = rosbag.Bag(BAG_FILE)
+    laser_current = []
+    config_msg_times = []
+    for x in range(3):
+        for topic, msg, t in bagfile.read_messages('/flymad_micro/laser' + str(x) + '/configuration'):
+            config_msg_times.append((t.secs +t.nsecs*1e-9))
+    for topic, msg, t in bagfile.read_messages('/targeter/targeted'):
+        laser_current.append((t.secs +t.nsecs*1e-9,msg.laser_power))
+    laser_data = DataFrame(laser_current, columns=['Timestamp', 'Laser_state'], dtype=np.float64)
+    laser_data[laser_data.Timestamp <= min(config_msg_times)] = 0
+    
+    lTime = []
+    l0 = []
+    l1 = []
+    l2 = []
+    
+    for x in laser_data.index:
+        lTime.append(laser_data.Timestamp.ix[x])
+        l0.append(int('{0:04b}'.format(int(laser_data['Laser_state'].ix[x]))[-1]))
+        l1.append(int('{0:04b}'.format(int(laser_data['Laser_state'].ix[x]))[-2]))
+        l2.append(int('{0:04b}'.format(int(laser_data['Laser_state'].ix[x]))[-3]))
+    laser_channels = DataFrame({'Timestamp':lTime, 'Laser0_state':l0, 'Laser1_state':l1, 'Laser2_state':l2}, dtype=np.float64)
+    laser_channels = convert_timestamps(laser_channels)
+    return laser_channels
 
     
 def sendMail(RECIPIENT,SUBJECT,TEXT):
