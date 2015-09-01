@@ -5,6 +5,9 @@ from pandas import DataFrame
 import numpy as np
 import glob
 import rosbag
+import matplotlib.pyplot as plt
+from scipy.signal import argrelextrema
+import math
 
 
 
@@ -104,7 +107,6 @@ def get_laser_states(BAG_FILE):
     for topic, msg, t in bagfile.read_messages('/targeter/targeted'):
         laser_current.append((t.secs +t.nsecs*1e-9,msg.laser_power))
     laser_data = DataFrame(laser_current, columns=['Timestamp', 'Laser_state'], dtype=np.float64)
-    laser_data[laser_data.Timestamp <= min(config_msg_times)] = 0
     
     lTime = []
     l0 = []
@@ -117,9 +119,35 @@ def get_laser_states(BAG_FILE):
         l1.append(int('{0:04b}'.format(int(laser_data['Laser_state'].ix[x]))[-2]))
         l2.append(int('{0:04b}'.format(int(laser_data['Laser_state'].ix[x]))[-3]))
     laser_channels = DataFrame({'Timestamp':lTime, 'Laser0_state':l0, 'Laser1_state':l1, 'Laser2_state':l2}, dtype=np.float64)
+    laser_channels = laser_channels[laser_channels.Timestamp > min(config_msg_times) ] 
     laser_channels = convert_timestamps(laser_channels)
     return laser_channels
 
+
+def detect_stim_bouts(datadf, column):
+    datadf[column][datadf[column] > 0 ] = 1
+        
+    maxima = argrelextrema(datadf[column].values, np.greater_equal)[0]
+    minima = argrelextrema(datadf[column].values, np.less_equal)[0]
+    
+    diff = maxima - minima
+    ons = argrelextrema(diff, np.greater)[0]
+    offs = argrelextrema(diff, np.less)[0]
+    number_of_bouts = len(ons)
+    if number_of_bouts > 0:
+        bout_lengths = []
+        for x in range(number_of_bouts):
+            bout_lengths.append((datadf.index[offs[x]+1] - datadf.index[ons[x]]).total_seconds())
+        bout_duration = int(np.round(np.mean(bout_lengths)))
+
+        first_TS = datadf.index[ons[0]]
+        last_TS = datadf.index[offs[-1]]
+    else:
+        bout_duration = 0
+        first_TS = datadf.index[0]
+        last_TS = datadf.index[0]
+    return number_of_bouts, bout_duration, first_TS, last_TS
+        
     
 def sendMail(RECIPIENT,SUBJECT,TEXT):
     import sys
