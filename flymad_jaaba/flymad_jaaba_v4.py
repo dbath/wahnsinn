@@ -10,8 +10,13 @@ import argparse
 import glob
 import os
 from scipy import stats as st
+from scipy.stats import kruskal
 import flymad_jaaba.utilities as utilities
 import flymad_jaaba.target_detector as target_detector
+import flymad.fake_plotly as fake_plotly
+import pprint
+#import flymad.madplot as madplot
+
 
 #matlab data should be imported as csv with:
 # column 1: seconds since epoch (16 digit precision)
@@ -88,6 +93,159 @@ def binarize_laser_data(BAG_FILE, laser_number):
     laser_data['Laser_state'][laser_data['Laser_state'] > 0.0] = 1.0
     laser_data = convert_timestamps(laser_data)
     return laser_data
+
+def calc_p_values(data, gt1_name, gt2_name,
+                  stat_colname=None,
+                  num_bins=50, bin_how='mean',
+                  ):
+
+    if stat_colname is None:
+        raise ValueError("you must explicitly set stat_colname (try 'maxWingAngle')")
+    
+    data.index = data.index.astype(np.int64)  #LAZY DANNO. DROP TIMESTAMPS FOR BINNING.
+    data['synced_ns'] = data.index
+    
+    df_ctrl = data[data.group == gt1_name][['FlyID', stat_colname, 'synced_ns']]
+    df_exp = data[data.group == gt2_name][['FlyID', stat_colname, 'synced_ns']]
+
+    align_start = df_ctrl.index.min()
+    dalign = df_ctrl.index.max() - align_start
+
+    p_values = DataFrame()
+
+    if bin_how=='mean':
+        bin_func = np.mean
+    elif bin_how=='median':
+        bin_func = np.median
+
+    bins = np.linspace(0,dalign,num_bins+1) + align_start
+    binned_ctrl = pd.cut(df_ctrl.index, bins, labels= bins[:-1])
+    binned_exp = pd.cut(df_exp.index, bins, labels= bins[:-1])
+    for x in binned_ctrl.levels:
+        test1_full_dataset = df_ctrl[binned_ctrl == x]
+        test2_full_dataset = df_exp[binned_exp == x]
+        bin_start_time = test1_full_dataset['synced_ns'].min()
+        bin_stop_time = test1_full_dataset['synced_ns'].max()
+
+        test1 = []
+        for obj_id, fly_group in test1_full_dataset.groupby('FlyID'):
+            test1.append( bin_func(fly_group[stat_colname].values) )
+        test1 = np.array(test1)
+        
+        test2 = []
+        for obj_id, fly_group in test2_full_dataset.groupby('FlyID'):
+            test2.append( bin_func(fly_group[stat_colname].values) )
+        test2 = np.array(test2)
+        
+        try:
+            hval, pval = kruskal(test1, test2)
+        except ValueError as err:
+            pval = 1.0
+
+        dftemp = DataFrame({'Bin_number': x,
+                            'P': pval,
+                            'bin_start_time':bin_start_time,
+                            'bin_stop_time':bin_stop_time,
+                            'name1':gt1_name, 
+                            'name2':gt2_name,
+                            'test1_n':len(test1),
+                            'test2_n':len(test2),
+                            }, index=[x])
+        p_values = pd.concat([p_values, dftemp])
+    return p_values
+
+def view_pairwise_stats( data, names, fig_prefix, **kwargs):
+    """ data = output from gather_data().   
+        names = list of groups (ex. ['foo','bar','baz'])
+        fig_prefix = full path and filename (without extension) of plot name.
+        **kwargs = 
+    """
+    pairs = []
+    for i,name1 in enumerate(names):
+        for j, name2 in enumerate(names):
+            if j<=i:
+                continue
+            pairs.append( (name1, name2 ) )
+
+    graph_data = []
+    layout=None
+    pvalue_results = {}
+    for pair in pairs:
+        name1, name2 = pair
+        pairwise_data = get_pairwise( data, name1, name2, **kwargs)
+        if pairwise_data is not None:
+            graph_data.append( pairwise_data['data'] )
+            layout=pairwise_data['layout']
+            pvalue_results[pair] = pairwise_data['df']
+
+    if len( graph_data )==0:
+        return
+
+    result2 = fake_plotly.plot( graph_data, layout=layout)
+    ax = result2['fig'].add_subplot(111)
+    #ax.axhline( -np.log10(1), color='k', lw=0.2 )
+    #ax.axhline( -np.log10(0.05), color='k', lw=0.2 )
+    #ax.axhline( -np.log10(0.01), color='k', lw=0.2 )
+    #ax.axhline( -np.log10(0.001), color='k', lw=0.2 )
+    if len(graph_data)>=1:
+        #only one pairwise comparison
+        n_comparisons = len(pairwise_data['df'])
+        ax.axhline( -np.log10(0.05/n_comparisons), color='r', lw=0.5, linestyle='--' )
+
+    pprint.pprint(result2)
+    for ext in ['.png','.svg']:
+        fig_fname = fig_prefix + '_p_values' + ext
+        result2['fig'].savefig(fig_fname)
+        print 'saved',fig_fname
+
+    return pvalue_results
+
+def get_pairwise(data,gt1_name,gt2_name,**kwargs):
+    layout_title = kwargs.pop('layout_title',None)
+    #human_label_dict = kwargs.pop('human_label_dict',None)
+    p_values = calc_p_values(data, gt1_name, gt2_name,**kwargs)
+    if len(p_values)==0:
+        return None
+
+    starts = np.array(p_values['bin_start_time'].values)
+    stops = np.array(p_values['bin_stop_time'].values)
+    pvals = p_values['P'].values
+    n1 = p_values['test1_n'].values
+    n2 = p_values['test2_n'].values
+    logs = -np.log10(pvals)
+
+    xs = []
+    ys = []
+    texts = []
+
+    for i in range(len(logs)):
+        xs.append( starts[i] / 1000000000 ) #convert to seconds
+        ys.append( logs[i] )
+        texts.append( 'p=%.3g, n=%d,%d t=%s to %s'%(
+            pvals[i], n1[i], n2[i], starts[i], stops[i] ) )
+
+        xs.append( stops[i]  / 1000000000 ) #convert to seconds
+        ys.append( logs[i] )
+        texts.append( '')
+
+    this_dict = {
+        'name':'%s vs. %s' % (gt1_name, gt2_name),
+        'x':[float(x) for x in xs],
+        'y':[float(y) for y in ys],
+        'text':texts,
+        }
+
+    layout = {
+        'xaxis': {'title': 'Time (s)'},
+        'yaxis': {'title': '-Log10(p)'},
+        }
+    if layout_title is not None:
+        layout['title'] = layout_title
+    results = {'data':this_dict,
+               'layout':layout,
+               'df':p_values,
+               }
+    return results
     
 def sync_jaaba_with_ros(FMF_DIR):
 
@@ -108,7 +266,7 @@ def sync_jaaba_with_ros(FMF_DIR):
     # ALIGN LASER STATE DATA
     laser_states = utilities.get_laser_states(BAG_FILE)
     try:
-        jaaba_data['Laser0_state'] = laser_states['Laser0_state'].asof(jaaba_data.index).fillna(value=0)
+        jaaba_data['Laser0_state'] = laser_states['Laser0_state'].asof(jaaba_data.index).fillna(value=1)
         jaaba_data['Laser1_state'] = laser_states['Laser1_state'].asof(jaaba_data.index).fillna(value=0)  #YAY! 
         jaaba_data['Laser2_state'] = laser_states['Laser2_state'].asof(jaaba_data.index).fillna(value=0)
     except:
@@ -144,28 +302,54 @@ def sync_jaaba_with_ros(FMF_DIR):
     ###    WING EXTENSION    ###
     jaaba_data['maxWingAngle'] = get_absmax(jaaba_data[['Left','Right']])
     #jaaba_data[jaaba_data['maxWingAngle'] > 3.1] = np.nan
-    """
-    BEGINNING = jaaba_data.Timestamp.index[0]
-    #FIRST_IR_ON = jaaba_data.Timestamp[((jaaba_data.Laser1_state > 0.001) & (jaaba_data.synced_time >= -1))].index[0]
-    FIRST_IR_ON = jaaba_data.Timestamp[jaaba_data.synced_time >= 0].index[0]
-    #FIRST_IR_OFF = jaaba_data.Timestamp[((jaaba_data.Laser1_state > 0.001) & (jaaba_data.synced_time <= 120))].index[-1]
-    FIRST_IR_OFF = jaaba_data.Timestamp[jaaba_data.synced_time >= 60000000000].index[0]
-    RED_ON = jaaba_data.Timestamp[jaaba_data.Laser2_state > 0.001].index[0]
-    RED_OFF = jaaba_data.Timestamp[jaaba_data.Laser2_state > 0.001].index[-1]
-    SECOND_IR_ON = jaaba_data.Timestamp[jaaba_data.synced_time >=320000000000].index[0]
-    #SECOND_IR_ON = jaaba_data.Timestamp[((jaaba_data.Laser1_state > 0.001) & (jaaba_data.synced_time >= 120))].index[0]
-    SECOND_IR_OFF = jaaba_data.Timestamp[jaaba_data.Laser1_state > 0.001].index[-1]
-    END = jaaba_data.Timestamp.index[-1]
     
-    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE)
-    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, BEGINNING, FIRST_IR_ON, '1-prestim')
-    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, FIRST_IR_ON, FIRST_IR_OFF, '2-IR1')
-    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, FIRST_IR_OFF, RED_ON, '3-post-IR1')
-    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, RED_ON,RED_OFF, '4-red')
-    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE,RED_OFF, SECOND_IR_ON,'5-post-red')
-    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE,SECOND_IR_ON,SECOND_IR_OFF,'6-IR2')
-    targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE,SECOND_IR_OFF,END,'7-post-IR2')
-    """
+    program = 'dark'
+    
+    plt.plot(jaaba_data.Timestamp, jaaba_data.Laser0_state, 'b')
+    plt.plot(jaaba_data.Timestamp, jaaba_data.Laser1_state, 'k')
+    plt.plot(jaaba_data.Timestamp, jaaba_data.Laser2_state, 'r')
+    plt.show()
+    
+    if program == 'IRR':
+        BEGINNING =jaaba_data.Timestamp[jaaba_data.synced_time >= -30000000000].index[0]#jaaba_data.Timestamp.index[0]
+        #FIRST_IR_ON = jaaba_data.Timestamp[((jaaba_data.Laser1_state > 0.001) & (jaaba_data.synced_time >= -1))].index[0]
+        FIRST_IR_ON = jaaba_data.Timestamp[jaaba_data.synced_time >= 0].index[0]
+        #FIRST_IR_OFF = jaaba_data.Timestamp[((jaaba_data.Laser1_state > 0.001) & (jaaba_data.synced_time <= 120))].index[-1]
+        FIRST_IR_OFF = jaaba_data.Timestamp[jaaba_data.synced_time >= 60000000000].index[0]
+        RED_ON = jaaba_data.Timestamp[jaaba_data.Laser2_state > 0.001].index[0]
+        RED_OFF = jaaba_data.Timestamp[jaaba_data.Laser2_state > 0.001].index[-1]
+        SECOND_IR_ON = jaaba_data.Timestamp[jaaba_data.synced_time >=320000000000].index[0]
+        #SECOND_IR_ON = jaaba_data.Timestamp[((jaaba_data.Laser1_state > 0.001) & (jaaba_data.synced_time >= 120))].index[0]
+        SECOND_IR_OFF = jaaba_data.Timestamp[jaaba_data.Laser1_state > 0.001].index[-1]
+        END = jaaba_data.Timestamp.index[-1]
+        
+        targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, background=False)
+        targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, BEGINNING, FIRST_IR_ON, '1-prestim', background=False)
+        targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, FIRST_IR_ON, FIRST_IR_OFF, '2-IR1', background=False)
+        targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, FIRST_IR_OFF, RED_ON, '3-post-IR1', background=False)
+        targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, RED_ON,RED_OFF, '4-red', background=False)
+        targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE,RED_OFF, SECOND_IR_ON,'5-post-red', background=False)
+        targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE,SECOND_IR_ON,SECOND_IR_OFF,'6-IR2', background=False)
+        targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE,SECOND_IR_OFF,END,'7-post-IR2', background=False)
+    
+    
+    
+    if program == 'dark':
+        BEGINNING =jaaba_data.Timestamp[jaaba_data.synced_time >= -30000000000].index[0]
+        print set(jaaba_data.Laser0_state), set(jaaba_data.Laser1_state), set(jaaba_data.Laser2_state)
+        STIM_ON = jaaba_data.Timestamp[jaaba_data.Laser1_state > 0.001].index[0]
+        STIM_OFF = jaaba_data.Timestamp[jaaba_data.Laser1_state > 0.001].index[-1]
+        LIGHTS_OUT = jaaba_data.Timestamp[jaaba_data.Laser0_state < 0.001].index[0]
+        LIGHTS_ON = jaaba_data.Timestamp[jaaba_data.Laser0_state < 0.001].index[-1]
+        END = jaaba_data.Timestamp.index[-1]
+        
+        targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, BEGINNING, STIM_ON, '1-prestim', background=False)
+        targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, STIM_ON,STIM_OFF, '2-stim', background=False)
+        targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, STIM_OFF, LIGHTS_OUT,'3-post-stim', background=False)
+        targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, LIGHTS_OUT, LIGHTS_ON,'4-DARK', background=False)
+        targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE, LIGHTS_ON, END,'7-light', background=False)
+        
+    
     targets.plot_trajectory_and_wingext(jaaba_data, BAG_FILE)
     
     ### ABDOMINAL BENDING   ###
@@ -405,7 +589,7 @@ if __name__ == "__main__":
     #BAG_FILE = '/groups/dickson/home/bathd/Dropbox/140927_flymad_rosbag_copy/rosbagOut_2014-09-27-14-53-54.bag'
 
 
-    if COMPILE_FOLDERS == False:
+    if 1:#COMPILE_FOLDERS == False:
         baglist = []
         for bag in glob.glob(BAGS + '/*.bag'):
             bagtimestamp = parse_bagtime(bag)
@@ -451,10 +635,20 @@ if __name__ == "__main__":
     sems = pd.read_pickle(JAABA + 'JAR/' + HANDLE + '_sem_' + binsize + '.pickle')
     ns = pd.read_pickle(JAABA + 'JAR/' + HANDLE + '_n_' + binsize + '.pickle')
 
-    plot_data(means, sems, ns, 'maxWingAngle')    
-    #plot_data(means, sems, ns, 'Length')
-    #plot_data(means, sems, ns, 'Width')
-    plot_data(means, sems, ns, 'dtarget')
+
+    plot_these = ['maxWingAngle','dtarget']
+    
+    rawdata = pd.read_pickle(JAABA + 'JAR/'+ HANDLE + '_rawdata_' + binsize + '.pickle')
+    rawdata = pool_genotypes(rawdata)
+    for measurement in plot_these:
+        plot_data(means, sems, ns, measurement)    
+        fname_prefix = JAABA + HANDLE + '_p-values_' + measurement + '_' + binsize + '_bins'
+        pp = view_pairwise_stats(rawdata, list(set(rawdata.group)), fname_prefix,
+                                       stat_colname=measurement,
+                                       layout_title=('Kruskal-Wallis H-test: ' + measurement),
+                                       num_bins=len(set(rawdata.index))/20,
+                                       )
+
 
 
 
