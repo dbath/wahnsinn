@@ -55,16 +55,30 @@ class FlyPanel(object):
         
         self._wide = utilities.match_wide_to_zoom(self._fmf_dir, (self._expdir + '/'))
         
+        self._widefmf = FMF.FlyMovie(self._wide)
+        
         self._handle, __, ___ = utilities.parse_fmftime(self._fmf_dir)
         
         self._zoomfmf, self._data, self._Tzero = self.get_data()
         
+        if self._data.Laser0_state.mean() >= 0.5:  #SOME EXPERIMENTS ARE DONE WITH lASER0 OFF.
+            if self._data.Laser0_state.mean() <= 0.99:  #SOME BAGFILES HAVE A FEW MSGS BEFORE LASER CONFIG
+                self.ILLUMINATED_WITH_LASER0 =1
+            else: 
+                self.ILLUMINATED_WITH_LASER0 =0
+        else:
+            self.ILLUMINATED_WITH_LASER0 =0
+        
         self._image_height, self._image_width = self._zoomfmf.get_frame(0)[0].shape
+        
         
         
 
     def get_frame(self, framenumber):
         return self._zoomfmf.get_frame(framenumber)
+    
+    def get_wide(self, framenumber):
+        return self._widefmf.get_frame(framenumber)
         
     def get_n_frames(self):
         return self._zoomfmf.get_n_frames()
@@ -86,9 +100,18 @@ class FlyPanel(object):
         jaaba_data = utilities.convert_timestamps(jaaba_data)
         
         # ALIGN LASER STATE DATA
-        jaaba_data['Laser1_state'] = utilities.binarize_laser_data(BAG_FILE, 2).resample('67ms', how='max')['Laser_state'].asof(jaaba_data.index).fillna(value=0)  #YAY! 
-        jaaba_data['Laser2_state'] = utilities.binarize_laser_data(BAG_FILE, 4).resample('67ms', how='max')['Laser_state'].asof(jaaba_data.index).fillna(value=0)
-        
+
+        laser_states = utilities.get_laser_states(BAG_FILE)
+        try:
+            jaaba_data['Laser0_state'] = laser_states['Laser0_state'].asof(jaaba_data.index).fillna(value=0)
+            jaaba_data['Laser1_state'] = laser_states['Laser1_state'].asof(jaaba_data.index).fillna(value=0)  #YAY! 
+            jaaba_data['Laser2_state'] = laser_states['Laser2_state'].asof(jaaba_data.index).fillna(value=0)
+        except:
+            print "\t ERROR: problem interpreting laser current values."
+            jaaba_data['Laser0_state'] = 0
+            jaaba_data['Laser2_state'] = 0
+            jaaba_data['Laser1_state'] = 0       
+         
         # COMPUTE AND ALIGN DISTANCE TO NEAREST TARGET
         targets = target_detector.TargetDetector(WIDE_FMF, FMF_DIR)
         targets.plot_targets_on_background()
@@ -97,6 +120,7 @@ class FlyPanel(object):
         jaaba_data['Timestamp'] = jaaba_data.index  #silly pandas bug for subtracting from datetimeindex...
         try:
             jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data.Timestamp[(jaaba_data.Laser2_state + jaaba_data.Laser1_state) > 0].index[0]
+        
         except:
             print "WARNING:   Cannot synchronize by stimulus. Setting T0 to frame0. "
             jaaba_data['synced_time'] = jaaba_data['Timestamp'] - jaaba_data.Timestamp.index[0]   
@@ -168,12 +192,36 @@ class FlyPanel(object):
         else:
             self._plot_overlays = False
         return self._plot_overlays
-    
+        
+    def plot_wide(self, frame, colourmap_choice, ax, shift):
+        
+        image_height, image_width = frame.shape
+        #frame = np.flipud(frame)
+        if shift==None:
+            print "taking the middle bit"
+            if image_width > image_height:
+                dif = (image_width - image_height)/2
+                cropped_frame = frame[dif:(image_width-dif), 0:-1]
+            elif image_height > image_width:
+                dif = (image_height - image_width)/2
+                cropped_frame = frame[0:-1, shift:(image_height-dif)]
+        else:
+            dif = (image_width - image_height)
+            cropped_frame = frame[0:-1, shift:(image_width-dif+shift)]
+            
+        plt.setp(ax.get_yticklabels(), visible=False)
+        plt.setp(ax.get_xticklabels(), visible=False)
+
+        ax.imshow(cropped_frame, cmap = colourmap_choice)
+        ax.set_xticks([]); ax.set_yticks([])
+        np.set_printoptions(precision=2)    
+        
+        
     def plot_zoom(self, frame, timestamp, colourmap_choice, jaaba, ax):
         
         image_height, image_width = frame.shape
         
-        frame = np.flipud(frame)
+        #frame = np.flipud(frame)
         plt.setp(ax.get_yticklabels(), visible=False)
         plt.setp(ax.get_xticklabels(), visible=False)
 
@@ -259,25 +307,26 @@ class FlyPanel(object):
         x_values = (visible_data['synced_time'] / np.timedelta64(1,'s')).values
         y_values = visible_data[measurement].values
         
-        plt.plot(x_values, y_values,  color=colour, linewidth=3)
+        plt.plot(x_values, y_values,  color=colour, linewidth=3, zorder=100)
         ax.set_xlim(min(axis_data['synced_time'] / np.timedelta64(1, 's')) , max(axis_data['synced_time'] / np.timedelta64(1, 's')))  
          
         ax.set_ylim(0.85*(min(axis_data[measurement].dropna())),1.15*(max(axis_data[measurement].dropna())))
-        ax.set_ylabel(title , fontsize=22)
+        ax.set_ylabel(title , fontsize=24)
         if axtitle == 'w_titles':
-            ax.set_xlabel('Time (s)', fontsize=22)
-            ax.tick_params(axis='y', which='major', labelsize=12)  
+            ax.set_xlabel('Time (s)', fontsize=24)
+            ax.tick_params(axis='y', which='major', labelsize=14)  
 
 
-        plt.axvline((visible_data['synced_time'][-1] / np.timedelta64(1,'s')), color='#00FF00', linewidth=2)  
-        """
-        # REMOVE THE HACK BELOW HERE!
+        plt.axvline((visible_data['synced_time'][-1] / np.timedelta64(1,'s')), color='#00FF00', linewidth=2, zorder=101)  
         
-        STIM_LIST = [[0,1],[4,5],[8,9],[12,13],[16,17],[20,21],[24,25],[28,29],[32,33],[36,37]]
-        for ons, offs in STIM_LIST:
-            ax.axvspan(ons, offs,  facecolor='red', linewidth=0, edgecolor=None, alpha=0.3, zorder=10)
-        
-        """
+        if self.ILLUMINATED_WITH_LASER0:
+            laser_0 = collections.BrokenBarHCollection.span_where((axis_data.synced_time.values/ np.timedelta64(1,'s')), 
+                        ymin=0.85*(min(axis_data[measurement].dropna())),ymax=1.15*(max(axis_data[measurement].dropna())), 
+                        where=axis_data['Laser0_state'] == 0.0, facecolor='k', edgecolor=None,
+                        alpha=0.9, zorder=10) #green b2ffb2
+            ax.add_collection(laser_0)
+
+
         laser_1 = collections.BrokenBarHCollection.span_where((axis_data.synced_time.values/ np.timedelta64(1,'s')), 
                     ymin=0.85*(min(axis_data[measurement].dropna())),ymax=1.15*(max(axis_data[measurement].dropna())), 
                     where=axis_data['Laser1_state'] > 0.0, facecolor='k', edgecolor=None,
