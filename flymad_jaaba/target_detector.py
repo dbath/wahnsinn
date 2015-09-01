@@ -103,10 +103,10 @@ class TargetDetector(object):
         for c in contours_targets:
             area = cv2.contourArea(c)
             #TARGETS MUST BE APPROPRIATE SIZE
-            if (area >= 75) and (area <=400):
+            if (area >= 100) and (area <=400):
                 (x,y), radius = cv2.minEnclosingCircle(c)
                 #CHECK IF TARGET IN CENTRE 80% OF ARENA
-                if ( ((x - cx)**2 + (y - cy)**2) <= (cr*0.7)**2): 
+                if ( ((x - cx)**2 + (y - cy)**2) <= (cr*0.5)**2): 
                     self._targets.append([x,y, radius])
         return self._targets
 
@@ -156,7 +156,7 @@ class TargetDetector(object):
         cv2.imwrite((self._tempdir + 'trajectory.png'), im)
         cv2.destroyAllWindows() 
     
-    def plot_trajectory_and_wingext(self, WING_DF, BAG_FILE, TS_START=None, TS_END=None, FN='full'):#, TS_START, TS_END):
+    def plot_trajectory_and_wingext(self, WING_DF, BAG_FILE, TS_START=None, TS_END=None, FN='full', background=True):#, TS_START, TS_END):
         """ Plots trajectory with wing angle indicated in colourmap. 
             Give start and end timestamps to limit trajectory to a section of the experiment.
         """
@@ -168,12 +168,33 @@ class TargetDetector(object):
         WING_DF = WING_DF[TS_START:TS_END]
         WING_DF = WING_DF.sort('maxWingAngle')
         print FN, TS_END-TS_START
-        
+ 
         im = cv2.imread(self._tempdir + 'background.png')
-        fig = gcf()
-        ax = fig.gca(frameon=False)
-        s = ax.scatter(WING_DF.fly_x,WING_DF.fly_y, c=WING_DF.maxWingAngle,vmin=0.0, vmax=2.1, zorder=1, s=7, linewidths=0 ) 
-        plt.imshow(im, zorder=0)
+       
+        if background == True:
+            im = cv2.imread(self._tempdir + 'background.png')
+            fig = gcf()
+            ax = fig.gca(frameon=False) 
+            s = ax.scatter(WING_DF.fly_x,WING_DF.fly_y, c=WING_DF.maxWingAngle,vmin=0.0, vmax=2.1, zorder=1, s=7, linewidths=0   ) 
+        elif background == False:
+            img = cv2.imread(self._tempdir + 'background.png')
+            im = np.zeros((img.shape[0], img.shape[1], img.shape[2]), dtype=np.uint8) +255
+            fig = gcf()
+            ax = fig.gca(frameon=False)
+            targets = self.detect_targets()
+            for coords in targets:
+                x = int(np.rint(coords[0]))
+                y = int(np.rint(coords[1]))
+                r = int(np.rint(coords[2]))
+                cv2.circle(im, (x, y), r-2, (100, 100, 100), -1)
+        
+            (cx, cy), cr = self._arena.circ
+            cv2.circle(im, (int(cx), int(cy)),int(cr)-8, (20, 20, 20),2)
+            s = ax.scatter(WING_DF.fly_x,WING_DF.fly_y, c=WING_DF.maxWingAngle,vmin=0.0, vmax=2.1, zorder=1, s=17, linewidths=0   ) 
+            
+
+          
+        plt.imshow(im)#, zorder=0)   
         plt.axis('off')
         cbaxes = fig.add_axes([0.9,0.2,0.025,0.60])
         cbar = plt.colorbar(s, cax = cbaxes )
@@ -181,9 +202,10 @@ class TargetDetector(object):
         cbar.ax.tick_params(labelsize=10)
         plt.setp(ax.get_yticklabels(), visible=False)
         plt.setp(ax.get_xticklabels(), visible=False)
-        plt.savefig(self._tempdir + 'wingext_trajectory_' + FN + '.png', bbox_inches='tight', pad_inches=0   )
+        plt.savefig(self._tempdir + 'wingext_trajectory_' + FN + '.svg', bbox_inches='tight', pad_inches=0.0   )
+        plt.savefig(self._tempdir + 'wingext_trajectory_' + FN + '.pdf', bbox_inches='tight', pad_inches=0.0   )
+        plt.savefig(self._tempdir + 'wingext_trajectory_' + FN + '.png', bbox_inches='tight', pad_inches=0.0   )
         plt.close('all')
-
 
     def get_targets(self):
         return self._targets
