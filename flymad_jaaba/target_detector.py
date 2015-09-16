@@ -50,6 +50,7 @@ class TargetDetector(object):
         
         self._targets = self.detect_targets()
         
+        
     
         
             
@@ -103,7 +104,7 @@ class TargetDetector(object):
         for c in contours_targets:
             area = cv2.contourArea(c)
             #TARGETS MUST BE APPROPRIATE SIZE
-            if (area >= 100) and (area <=400):
+            if (area >= 80) and (area <=400):
                 (x,y), radius = cv2.minEnclosingCircle(c)
                 #CHECK IF TARGET IN CENTRE 80% OF ARENA
                 if ( ((x - cx)**2 + (y - cy)**2) <= (cr*0.5)**2): 
@@ -224,9 +225,12 @@ class TargetDetector(object):
         distances['Timestamp'] = positions.Timestamp
         distances = utilities.convert_timestamps(distances)
         
-        dtarget = DataFrame(distances.min(axis=1), columns=['dtarget'])
-        return dtarget
+        self.dtarget = DataFrame(distances.min(axis=1), columns=['dtarget'])
+        return self.dtarget
 
+    def get_dtarget_at_timestamp(self, _timestamp):
+        data = self.dtarget[self.dtarget.Timestamp >= _timestamp].iloc[0]
+        return data['dtarget'].values
         
 if __name__ == '__main__':
 

@@ -1,5 +1,5 @@
 
-
+import os, fnmatch
 import pandas as pd
 from pandas import DataFrame
 import numpy as np
@@ -9,7 +9,12 @@ import matplotlib.pyplot as plt
 from scipy.signal import argrelextrema
 import math
 
-
+def find_files(directory, pattern):
+    for root, dirs, files in os.walk(directory):
+        for basename in files:
+            if fnmatch.fnmatch(basename, pattern):
+                filename = os.path.join(root, basename)
+                yield filename
 
 def convert_timestamps(df):
     df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='s')
