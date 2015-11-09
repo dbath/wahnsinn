@@ -303,12 +303,9 @@ def sync_jaaba_with_ros(FMF_DIR):
     jaaba_data['maxWingAngle'] = get_absmax(jaaba_data[['Left','Right']])
     #jaaba_data[jaaba_data['maxWingAngle'] > 3.1] = np.nan
     
-    program = 'dark'
+    program = None
     
-    plt.plot(jaaba_data.Timestamp, jaaba_data.Laser0_state, 'b')
-    plt.plot(jaaba_data.Timestamp, jaaba_data.Laser1_state, 'k')
-    plt.plot(jaaba_data.Timestamp, jaaba_data.Laser2_state, 'r')
-    plt.show()
+
     
     if program == 'IRR':
         BEGINNING =jaaba_data.Timestamp[jaaba_data.synced_time >= -30000000000].index[0]#jaaba_data.Timestamp.index[0]

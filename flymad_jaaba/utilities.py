@@ -8,6 +8,9 @@ import rosbag
 import matplotlib.pyplot as plt
 from scipy.signal import argrelextrema
 import math
+import subprocess
+import sh
+
 
 def find_files(directory, pattern):
     for root, dirs, files in os.walk(directory):
@@ -16,6 +19,12 @@ def find_files(directory, pattern):
                 filename = os.path.join(root, basename)
                 yield filename
 
+def call_command(command):
+    subprocess.Popen(command.split(' '))
+
+def delete_temp_files(DIR):
+    shutil.rmtree(DIR)
+    
 def convert_timestamps(df):
     df['Timestamp'] = pd.to_datetime(df['Timestamp'], unit='s')
     df.index = pd.to_datetime(df.pop('Timestamp'), utc=True)
@@ -142,7 +151,7 @@ def detect_stim_bouts(datadf, column):
     if number_of_bouts > 0:
         bout_lengths = []
         for x in range(number_of_bouts):
-            bout_lengths.append((datadf.index[offs[x]+1] - datadf.index[ons[x]]).total_seconds())
+            bout_lengths.append(1000.0*(datadf.index[offs[x]+1] - datadf.index[ons[x]]).total_seconds())
         bout_duration = int(np.round(np.mean(bout_lengths)))
 
         first_TS = datadf.index[ons[0]]
