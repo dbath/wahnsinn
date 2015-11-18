@@ -6,7 +6,7 @@ import rospy
 import flymad.msg
 import flymad.srv
 
-from flymad.constants import LASERS_ALL_OFF, LASER2_ON, LASER1_ON, LASER0_ON
+from flymad.constants import LASERS_ALL_OFF, LASER2_ON, LASER1_ON
 
 class Experiment:
     def __init__(self):
@@ -16,7 +16,7 @@ class Experiment:
                                             latch=True) #latched so message is guarenteed to arrive      
         #configure the lasers
         self._ir_laser_conf.publish(enable=True,   #always enabled, we turn it on/off using /experiment/laser
-                                 frequency=25.0,      
+                                 frequency=0,      
                                  intensity=0.0)    #full power
         
 
@@ -26,16 +26,11 @@ class Experiment:
                                             latch=True) #latched so message is guarenteed to arrive
         self._red_laser_conf.publish(enable=True, frequency=16,intensity=0.0)
 
-        #Ambient light is connected to 'LASER0'
-        self._ambient_conf = rospy.Publisher('/flymad_micro/laser0/configuration',
-                                            flymad.msg.LaserConfiguration,
-                                            latch=True)
-        self._ambient_conf.publish(enable=True, frequency=0, intensity=0.0)
         #ensure the targeter is running so we can control the laser
         rospy.loginfo('waiting for targeter')
         rospy.wait_for_service('/experiment/laser')
         self._laser = rospy.ServiceProxy('/experiment/laser', flymad.srv.LaserState)
-        self._laser(LASER0_ON)
+        self._laser(LASERS_ALL_OFF)
 
         self._OK_to_initialize = 0
         self._tracking_accuracy = rospy.Subscriber('/flymad/tracked', 
@@ -51,13 +46,13 @@ class Experiment:
         return foo
 
     def run(self):
-        T_WAIT          = 40
+        T_WAIT          = 20
         RED_BOUTS        = 6
         T_RED_ON         = 5
         T_RED_OFF        = 5
         T_WAIT2         = 40
         T_IR           = 60
-        T_WAIT3         = 600
+        T_WAIT3         = 60
 
         RED_LASER = LASER2_ON
         IR_LASER  = LASER1_ON
@@ -66,7 +61,7 @@ class Experiment:
         #experiment continues until the node is killed
 
         #rospy.loginfo('running %ss IR only, %ss IR+red, %s red only   NOT TRUE' % (T_IR, T_IR_AND_RED, T_RED))
-        #rospy.loginfo('running %ss IR then %ss RED' % (((T_IR_ON + T_IR_OFF) * IR_BOUTS), T_RED))
+        rospy.loginfo('running %ss IR then %ss RED' % (((T_RED_ON + T_RED_OFF) * RED_BOUTS), T_IR))
         initialized_target = 0
         try:
             repeat = 0
@@ -74,32 +69,24 @@ class Experiment:
 
 
             while ( repeat < 1 ) and not (rospy.is_shutdown()):
-                if (repeat == 0):
-                    #rospy.loginfo(self._OK_to_initialize)
-                    if (initialized_target ==0) and (self._OK_to_initialize == 1):
-                        rospy.loginfo( "INITIATING STIMULUS PROTOCOL")
-                        initialized_target +=1
-                    else:
-                        rospy.loginfo("...WAITING FOR ACCURATE TARGETING TO INITIATE STIMULUS")
-                        continue
+
+                rospy.loginfo('red on')
                 for x in range(RED_BOUTS):
-                    rospy.loginfo('RED ON')
-                    self._laser(RED_LASER | LASER0_ON)
+                    self._laser(RED_LASER)
                     rospy.sleep(T_RED_ON)
-                    self._laser(LASER0_ON)
-                    rospy.loginfo('RED OFF')
+                    self._laser(LASERS_ALL_OFF)
                     rospy.sleep(T_RED_OFF)
                 #turn off
                 rospy.loginfo('Off')
-                self._laser(LASER0_ON)
+                self._laser(LASERS_ALL_OFF)
                 rospy.sleep(T_WAIT2)
-                #turn on IR
-                rospy.loginfo('IR')
-                self._laser(IR_LASER | LASER0_ON)
+                #turn on red
+                rospy.loginfo('IR on')
+                self._laser(IR_LASER)
                 rospy.sleep(T_IR)
                 #turn off all
                 rospy.loginfo('Off')
-                self._laser(LASER0_ON)
+                self._laser(LASERS_ALL_OFF)
                 rospy.sleep(T_WAIT3)
                 repeat += 1
 
@@ -117,7 +104,7 @@ class Experiment:
             #the node was cleanly killed
             pass
 
-        self._laser(LASER0_ON)
+        self._laser(LASERS_ALL_OFF)
 
 if __name__ == "__main__":
     rospy.init_node('experiment')
