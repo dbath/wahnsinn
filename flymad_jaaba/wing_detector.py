@@ -46,15 +46,20 @@ class WingDetector(object):
             os.makedirs(self.DEBUGGING_DIR)
         
         self.DEBUGGING_DIR = self.DEBUGGING_DIR + '/'
+        self.error_count = 0
+        self.message = ""
         
         self.font = cv2.FONT_HERSHEY_SIMPLEX
         
         self.previous_head_extended = None
         self.flipped = 0
+        self.adjust_tracking_parameters = ((0,0,0),(0,0,0),(0,0,0))
+        self.ERROR_L= False
+        self.ERROR_R= False
        
         self.wingData = DataFrame({'BodyAxis':[],  'leftAngle':[], 'leftWingLength':[], 'Length':[],  'rightAngle':[],'rightWingLength':[], 'Timestamp':[],'Width':[]}, dtype=np.float64)            
 
-
+        self.tracking_info = DataFrame({'a_wingAngle_left':[],'a_wingArea_left':[],'b_wingAngle_right':[], 'b_wingArea_right':[], 'c_head_location_x':[],'c_head_location_y':[], 'd_bodyAxis':[]}, dtype=np.float64)
     
     def execute(self):
     
@@ -64,6 +69,9 @@ class WingDetector(object):
 
         for frame_number in range(0,total_frames,1):
             progress.update(frame_number)
+            self.ERROR_DETECTED= False
+            self.error_count = 0
+            self.adjust_tracking_parameters = ((0,0,0),(0,0,0),(0,0,0))
             self.detectWings(self.saveImage, False, frame_number)  #MAKE FIRST OPTION TRUE TO SAVE TRACKING MOVIES.
 
         return
@@ -107,7 +115,7 @@ class WingDetector(object):
     
     def devignette(self, frame):
         
-        if int(self.fmf_file.rsplit('_')[-2]) == 151006:
+        if int(self.fmf_file.rsplit('_')[-2]) >= 151006:
             V_coeff =[ 0.608421,0.000660594,0.00071838,
                        -6.83654e-07,2.29008e-07,-6.11814e-07,
                        -8.79999e-11,-1.63231e-10,-2.10072e-11,-2.10298e-10]
@@ -224,12 +232,17 @@ class WingDetector(object):
 
 
         #FLY FEATURES DERIVED FROM BAG FILE:
-        centroid, head = self.get_centroid_and_head(timestamp_FMT)
-        backPoint = tuple(sum(y) / len(y) for y in zip(centroid, head))
-        headLine = self.compute_perpendicular_from_points(head, centroid)
-        axisLine = self.compute_axis_from_points(head, centroid)
-        bodyThresh, wingThresh, ellThresh = self.get_tracking_thresholds(timestamp_FMT, distance, targ_dist)
-                    
+        try:
+            centroid, head = self.get_centroid_and_head(timestamp_FMT)
+            backPoint = tuple(sum(y) / len(y) for y in zip(centroid, head))
+            headLine = self.compute_perpendicular_from_points(head, centroid)
+            axisLine = self.compute_axis_from_points(head, centroid)
+            bodyThresh, wingThresh, ellThresh = self.get_tracking_thresholds(timestamp_FMT, distance, targ_dist)
+            BagData = True
+        except:
+            centroid, head = (0,0),(0,0)
+            bodyThresh, wingThresh, ellThresh = self.get_tracking_thresholds(timestamp_FMT, distance, targ_dist) 
+            BagData = False          
 
 
         #FIT ELLIPSE TO BODY:
@@ -242,17 +255,18 @@ class WingDetector(object):
 
         bodyEllipse=None
         
-        for cnt in bodyCont:
-            if cv2.contourArea(cnt) <=900000:
-                if cv2.contourArea(cnt) >= 7000:
-                    ellipse= cv2.fitEllipse(cnt)
-                    if self.pointInEllipse(centroid[0],centroid[1],ellipse[0][0],ellipse[0][1],ellipse[1][0],ellipse[1][1],ellipse[2]):
-                        bodyEllipse = ellipse
-                        slope = self.convert_ellipseAngle_to_slope(bodyEllipse[2])
-                        yint = -1.0*slope*bodyEllipse[0][0] + bodyEllipse[0][1]
-                        xint = (-1.0*yint / slope)
-                        axisLine = slope, yint, xint
-                        head = self.pointOfIntersection(headLine[0],headLine[1], axisLine[0], axisLine[1])
+        if BagData:
+            for cnt in bodyCont:
+                if cv2.contourArea(cnt) <=900000:
+                    if cv2.contourArea(cnt) >= 7000:
+                        ellipse= cv2.fitEllipse(cnt)
+                        if self.pointInEllipse(centroid[0],centroid[1],ellipse[0][0],ellipse[0][1],ellipse[1][0],ellipse[1][1],ellipse[2]):
+                            bodyEllipse = ellipse
+                            slope = self.convert_ellipseAngle_to_slope(bodyEllipse[2])
+                            yint = -1.0*slope*bodyEllipse[0][0] + bodyEllipse[0][1]
+                            xint = (-1.0*yint / slope)
+                            axisLine = slope, yint, xint
+                            head = self.pointOfIntersection(headLine[0],headLine[1], axisLine[0], axisLine[1])
         if bodyEllipse == None:
             for cnt in bodyCont:
                 if cv2.contourArea(cnt) <=900000:
@@ -266,12 +280,18 @@ class WingDetector(object):
             imcopy = im.copy()
             cv2.putText(imcopy, "ERROR", (480,530), self.font, 1, (255,255,255), 3)
             self.wingData.loc[framenumber] = self.wingData.loc[framenumber-1]#[np.nan, np.nan, np.nan,  np.nan, np.nan. np.nan]
+            """
+            self.error_count+=1
+            if self.error_count >=3:
+                self.previous_head_extended == None
+                self.flipped = 0
+            """
             if self.saveImage == True:
                 cv2.imwrite(self._tempdir+'_tmp%05d.png'%(framenumber), imcopy)  
             return timestamp, np.nan, np.nan, np.nan, np.nan, np.nan             
         
         (f1, f2) = self.fociOfEllipse(bodyEllipse[0][0],bodyEllipse[0][1],bodyEllipse[1][0],bodyEllipse[1][1],bodyEllipse[2])
-        
+        """
         if debugging == True:
             imcopy = im.copy()
             cv2.ellipse(imcopy,bodyEllipse,(255,255,255),3)
@@ -283,7 +303,7 @@ class WingDetector(object):
             cv2.circle(imcopy,(int(head[0]),int(head[1])),5,(255,0,255),1)
             cv2.imwrite(self.DEBUGGING_DIR+str(framenumber)+'_00_ellipseFit.png', imcopy)
             cv2.destroyAllWindows
-            
+        """    
         
         head = self.get_nearest(head, [f1,f2])
         tail = self.get_furthest(head, [f1,f2])
@@ -315,7 +335,7 @@ class WingDetector(object):
         imcopy = im.copy()
         
         wingCont, hierarchy = cv2.findContours(dilated, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)    
-        hulls = []
+
         
         #FLIP BODY AXIS BASED ON PREVIOUS FRAMES
         
@@ -330,7 +350,7 @@ class WingDetector(object):
                 #print framenumber, ': ', self.wingData.ix[framenumber-1].BodyAxis, bodyEllipse[2], np.cos(np.radians(self.wingData.ix[framenumber-1].BodyAxis - bodyEllipse[2])), '\t', self.flipped
             
                 if not self.check_laterality(self.previous_head_extended, self.extend_vector(centroid,head), midline[0], midline[1], midline[2]):
-                    debugging = True
+                    #debugging = True
                     if self.flipped == 100:
                         for x in range(-101,1):
                             self.previous_head_extended = None
@@ -341,12 +361,7 @@ class WingDetector(object):
                     headLine, tailLine = tailLine, headLine
                     backPoint = tuple(sum(y) / len(y) for y in zip(centroid, head))
                     backPoint = tuple(sum(y) / len(y) for y in zip(centroid, backPoint))
-                    #print framenumber, ":   AXIS FLIPPED for history.", bodyEllipse[2]
-                    if bodyEllipse[2] <180.0:
-                        bodyEllipse= [bodyEllipse[0], bodyEllipse[1], bodyEllipse[2]+180.0]
-                    else:
-                        bodyEllipse= [bodyEllipse[0], bodyEllipse[1], bodyEllipse[2]-180.0]
-                    #print framenumber, ":   NEW ANGLE VALUE:", bodyEllipse[2]
+
                     self.flipped += 1
                 else: self.flipped = 0
         except:
@@ -357,9 +372,12 @@ class WingDetector(object):
         
         body_length = self.get_distance_between_coords(head,tail)
         abd_length =  self.get_distance_between_coords(backPoint, tail)        
-       
-       
+        body_angle = self.angle_from_vertical(tail, head)
+               
         ###########################################################################################
+        wingTips = []
+        wholeWings = []
+        wingArea = []
         
         for c in wingCont:
             area = cv2.contourArea(c)
@@ -386,39 +404,43 @@ class WingDetector(object):
                     pointSet2 = np.array(pointSet2).reshape((-1,1,2)).astype(np.int32)
                     pointSetTARGET = np.array(pointSetTARGET).reshape((-1,1,2)).astype(np.int32)
                     if (len(pointSet1) > 0):
-                        if cv2.contourArea(pointSet1) >=(3000/(wingThresh[1]+1)):
-                            if debugging == True: cv2.drawContours(imcopy,[pointSet1],0,(0,255,255),1)
-                            hulls.append(cv2.convexHull(pointSet1))
+                        if cv2.contourArea(pointSet1) >=(2500/(wingThresh[2]+1)):
+                            near, far = self.get_nearest_and_furthest_from_centroid(pointSet1, centroid)   
+                            if self.get_distance_between_coords(near, centroid) <= 150:
+                                winglength = self.get_distance_between_coords(far, backPoint)
+                                if (winglength <= 1.5*(body_length)) and (winglength >= abd_length):
+                                    wingTips.append(far)
+                                    wholeWings.append(pointSet1)
+                                    wingArea.append(cv2.contourArea(pointSet1))
                     if (len(pointSet2) > 0):
-                        if cv2.contourArea(pointSet2) >=(3000/(wingThresh[1]+1)):
-                            if debugging == True: cv2.drawContours(imcopy,[pointSet2],0,(255,0,0),1)
-                            hulls.append(cv2.convexHull(pointSet2))
-                    if (len(pointSetTARGET) > 0):
-                        if cv2.contourArea(pointSetTARGET) >=(100):
-                            if debugging == True: cv2.fillPoly(imcopy,pts=[pointSetTARGET],color=(185,30,30))
-                            #hulls.append(cv2.convexHull(pointSetTARGET))
-        
+                        if cv2.contourArea(pointSet2) >=(2500/(wingThresh[2]+1)):
+                            near, far = self.get_nearest_and_furthest_from_centroid(pointSet2, centroid)   
+                            if self.get_distance_between_coords(near, centroid) <= 150:
+                                winglength = self.get_distance_between_coords(far, backPoint)
+                                if (winglength <= 1.5*(body_length)) and (winglength >= abd_length):
+                                    wingTips.append(far)
+                                    wholeWings.append(pointSet2)
+                                    wingArea.append(cv2.contourArea(pointSet2))
 
         
-        wingTips = []
-        for h in hulls: 
-
-            near, far = self.get_nearest_and_furthest_from_centroid(h, centroid)   
-            if self.get_distance_between_coords(near, centroid) <= 150:
-                cv2.fillPoly(imcopy,h, (0,255,0))
-                cv2.circle(imcopy, near, 3, (0,0,0), -1)
-                cv2.circle(imcopy, far, 5, (255,255,255), -1)
-                winglength = self.get_distance_between_coords(far, backPoint)
-                if (winglength <= 2.0*(body_length)) and (winglength >= abd_length):
-                    wingTips.append(far)
-                    
-        
+        """            
+        if len(wingTips) == 0:
+            if not self.ERROR_DETECTED:
+                self.ERROR_DETECTED = True
+                self.adjust_tracking_parameters = self.add_nested_tuples(self.adjust_tracking_parameters, ((0,0,0),(10,0,0),(0,0,0)))
+                self.detectWings(True, True, framenumber)
+            return
+        """
         leftWingAngle = 0.0
         leftWing = tail
         rightWingAngle = 0.0
         rightWing = tail
-        for wing in wingTips:
-            THETA =  self.compute_angle_given_three_points(backPoint, wing, centroid)
+        leftWingOutline = []
+        rightWingOutline = []
+        leftWingArea = np.nan
+        rightWingArea = np.nan
+        for wing in np.arange(len(wingTips)):
+            THETA =  self.compute_angle_given_three_points(backPoint, wingTips[wing], centroid)
             if THETA >= np.pi:
                 THETA = THETA - 2.0*(np.pi)
             elif THETA <= -1.0*(np.pi):
@@ -426,70 +448,166 @@ class WingDetector(object):
             if THETA >= 0.0:
                 if THETA >= leftWingAngle:
                     leftWingAngle = THETA
-                    leftWing = wing
+                    leftWing = wingTips[wing]
+                    leftWingOutline = wholeWings[wing]
+                    leftWingArea = wingArea[wing]
             elif THETA <= 0.0:
                 if THETA <= rightWingAngle:
                     rightWingAngle = THETA
-                    rightWing = wing
+                    rightWing = wingTips[wing]
+                    rightWingOutline = wholeWings[wing]
+                    rightWingArea = wingArea[wing]
         
         leftWingLength = self.get_distance_between_coords(backPoint,leftWing)
         rightWingLength = self.get_distance_between_coords(backPoint,rightWing)
         
         if leftWingAngle == 0.0:
             leftWingAngle = np.nan
-            debugging = True
+            #debugging = True
         if rightWingAngle == 0.0:
             rightWingAngle = np.nan
-            debugging = True
+            #debugging = True
         
+        polynomial = np.poly1d([  9.21726165e-10,   1.44797851e-05,  -1.65264598e-02]
+)
         
-        if leftWingLength >375 or leftWingLength < 225:
-            leftWingAngle = np.nan
-            debugging = True
-        if rightWingLength >375 or rightWingLength < 225:
-            rightWingAngle = np.nan
-            debugging = True
+        try: final_leftWingLength
+        except:
+            if leftWingLength >350:
+                self.adjust_tracking_parameters = self.add_nested_tuples(self.adjust_tracking_parameters,((0,0,0),(-5,0,0),(0,0,0)))
+                self.ERROR_L = True
+                self.message = self.message + 'E1-'
+            elif leftWingLength < 225:
+                self.adjust_tracking_parameters = self.add_nested_tuples(self.adjust_tracking_parameters,((0,0,0),(5,0,0),(0,0,0)))
+                self.ERROR_L = True
+                self.message = self.message + 'E2-'
+            elif (leftWingAngle - polynomial(leftWingArea)) > 0.4:
+                self.adjust_tracking_parameters = self.add_nested_tuples(self.adjust_tracking_parameters,((5,1,0),(5,0,0),(0,0,0)))
+                self.ERROR_L = True
+                self.message = self.message + 'E3-'
+            elif (leftWingAngle - polynomial(leftWingArea)) < -0.4:
+                self.adjust_tracking_parameters = self.add_nested_tuples(self.adjust_tracking_parameters,((0,0,0),(-5,0,0),(0,0,0)))
+                self.ERROR_L = True
+                self.message = self.message + 'E4-'
             
+            else:
+                final_leftWingLength = leftWingLength
+                final_leftWingAngle = leftWingAngle
+                final_leftWing = leftWing
+                final_leftWingOutline = leftWingOutline
+                final_leftWingArea = leftWingArea
+                self.ERROR_L = False
+                self.message = self.message + 'E5-'
+                self.adjust_tracking_parameters = ((0,0,0),(0,0,0),(0,0,0))
+
+            if self.ERROR_L:
+                if self.error_count <3:
+                    cv2.imwrite(self.DEBUGGING_DIR+str(framenumber)+'_'+str(self.error_count)+'_L_'+str(wingThresh[0])+'.png', test)
+                    self.error_count +=1
+                    self.detectWings(True, True, framenumber)
+                    return
+                else:
+                    debugging = True  
+                    final_leftWingLength = np.nan
+                    final_leftWingAngle = np.nan
+                    final_leftWing = leftWing 
+                    final_leftWingOutline = []   
+                    final_leftWingArea = np.nan 
+                    self.adjust_tracking_parameters = ((0,0,0),(0,0,0),(0,0,0))
+                    self.message = self.message + 'E6-'
+
+        self.ERROR_L = False
+        self.error_count = 0
+  
+        try: final_rightWingLength
+        except:
+            if rightWingLength >350:
+                self.adjust_tracking_parameters = self.add_nested_tuples(self.adjust_tracking_parameters,((0,0,0),(-5,0,0),(0,0,0)))
+                self.ERROR_R = True
+                self.message = self.message + 'F1-'
+            elif rightWingLength < 225:
+                self.adjust_tracking_parameters = self.add_nested_tuples(self.adjust_tracking_parameters,((0,0,0),(5,0,0),(0,0,0)))
+                self.ERROR_R = True
+                self.message = self.message + 'F2-'
+            elif (rightWingAngle - polynomial(rightWingArea)) > 0.3:
+                self.adjust_tracking_parameters = self.add_nested_tuples(self.adjust_tracking_parameters,((5,1,0),(5,0,0),(0,0,0)))
+                self.ERROR_R = True
+                self.message = self.message + 'F3-'
+            elif (rightWingAngle - polynomial(rightWingArea)) < -0.2:
+                self.adjust_tracking_parameters = self.add_nested_tuples(self.adjust_tracking_parameters,((0,0,0),(-5,0,0),(0,0,0)))
+                self.ERROR_R = True
+                self.message = self.message + 'F4-'
+            else:
+                final_rightWingLength = rightWingLength
+                final_rightWingAngle = rightWingAngle
+                final_rightWing = rightWing
+                final_rightWingOutline = rightWingOutline
+                final_rightWingArea = rightWingArea
+                self.ERROR_R = False
+                self.message = self.message + 'F5-'
+                self.adjust_tracking_parameters = ((0,0,0),(0,0,0),(0,0,0))
+                
+            if self.ERROR_R:
+                if self.error_count <3:
+                    cv2.imwrite(self.DEBUGGING_DIR+str(framenumber)+'_'+str(self.error_count)+'_R_'+str(wingThresh[0])+'.png', test)
+                    self.error_count +=1
+                    self.detectWings(True, True, framenumber)
+                    return
+                else:
+                    debugging = True
+                    final_rightWingLength = np.nan
+                    final_rightWingAngle = np.nan
+                    final_rightWing = rightWing 
+                    final_rightWingOutline = []
+                    final_rightWingArea = np.nan
+                    self.adjust_tracking_parameters = ((0,0,0),(0,0,0),(0,0,0))
+                self.message = self.message + 'F6-'
+
+        self.ERROR_R = False                    
         
+        """        
         if debugging == True:            
             cv2.line(imcopy, (int(head[0]),int(head[1])), (int(tail[0]),int(tail[1])), (255,255,255), 1)
-            cv2.line(imcopy, (int(backPoint[0]),int(backPoint[1])), (int(leftWing[0]),int(leftWing[1])), (20,20,255),2)
-            cv2.line(imcopy, (int(backPoint[0]),int(backPoint[1])), (int(rightWing[0]),int(rightWing[1])), (20,255,20),2)
+            cv2.line(imcopy, (int(backPoint[0]),int(backPoint[1])), (int(final_leftWing[0]),int(final_leftWing[1])), (20,20,255),2)
+            cv2.line(imcopy, (int(backPoint[0]),int(backPoint[1])), (int(final_rightWing[0]),int(final_rightWing[1])), (20,255,20),2)
             cv2.circle(imcopy, (int(head[0]),int(head[1])), 3, (255,255,255), -1)
             cv2.circle(imcopy, (int(backPoint[0]),int(backPoint[1])), 5, (255,255,255), -1)
             try:
-                cv2.drawContours(imcopy,[pointSet2],0,(255,0,0),1)
-                cv2.drawContours(imcopy,[pointSet1],0,(0,255,255),1)
+                cv2.drawContours(imcopy,[final_leftWingOutline],0,(255,0,0),1)
+                cv2.drawContours(imcopy,[final_rightWingOutline],0,(0,255,255),1)
             except: 
                 pass
             #cv2.circle(imcopy, (int(centroid[0]),int(centroid[1])), 3, (255,0,255), -1)
-            cv2.putText(imcopy, str(np.degrees(leftWingAngle)), (10,25), self.font, 1, (20,20,255), 3)
-            cv2.putText(imcopy, str(-1.0*np.degrees(rightWingAngle)), (512, 25), self.font, 1, (20,255,20), 3)
+            cv2.putText(imcopy, str(np.degrees(final_leftWingAngle)), (10,25), self.font, 1, (20,20,255), 3)
+            cv2.putText(imcopy, str(-1.0*np.degrees(final_rightWingAngle)), (512, 25), self.font, 1, (20,255,20), 3)
             cv2.putText(imcopy, str(framenumber), (900, 950), self.font, 1, (255,255,255), 3) 
-            cv2.imwrite(self.DEBUGGING_DIR+str(framenumber)+'_05_results.png', imcopy)
+            #cv2.imwrite(self.DEBUGGING_DIR+str(framenumber)+'_05_results.png', imcopy)
             #cv2.imwrite(self.DEBUGGING_DIR+str(framenumber)+'_01_bodyNotWings_'+str(bodyThresh[0])+'.png', bodyNotWings)
             cv2.imwrite(self.DEBUGGING_DIR+str(framenumber)+'_02_wings_'+str(wingThresh[0])+'.png', test)
             #cv2.imwrite(self.DEBUGGING_DIR+str(framenumber)+'_03_eroded_'+str(wingThresh[1])+'.png', dilated)
             #cv2.imwrite(self.DEBUGGING_DIR+str(framenumber)+'_04_dilated_'+str(wingThresh[2])+'.png', dilatedCopy)
-            
+        """    
             
         if saveImage == True:
             imcopy = im.copy()
             try:
-                cv2.drawContours(imcopy,[pointSet2],0,(255,0,0),1)
-                cv2.drawContours(imcopy,[pointSet1],0,(0,255,255),1)
+                cv2.drawContours(imcopy,[final_leftWingOutline],0,(255,0,0),1)
+            except: 
+                pass
+            try:
+                cv2.drawContours(imcopy,[final_rightWingOutline],0,(0,255,255),1)
             except: 
                 pass
             cv2.line(imcopy, (int(head[0]),int(head[1])), (int(tail[0]),int(tail[1])), (255,255,255), 1)
-            cv2.line(imcopy, (int(backPoint[0]),int(backPoint[1])), (int(leftWing[0]),int(leftWing[1])), (20,20,255),2)
-            cv2.line(imcopy, (int(backPoint[0]),int(backPoint[1])), (int(rightWing[0]),int(rightWing[1])), (20,255,20),2)
+            cv2.line(imcopy, (int(backPoint[0]),int(backPoint[1])), (int(final_leftWing[0]),int(final_leftWing[1])), (20,20,255),2)
+            cv2.line(imcopy, (int(backPoint[0]),int(backPoint[1])), (int(final_rightWing[0]),int(final_rightWing[1])), (20,255,20),2)
             cv2.circle(imcopy, (int(head[0]),int(head[1])), 3, (255,255,255), -1)
             cv2.circle(imcopy, (int(backPoint[0]),int(backPoint[1])), 5, (255,255,255), -1)
             #cv2.circle(imcopy, (int(centroid[0]),int(centroid[1])), 3, (255,0,255), -1)
-            cv2.putText(imcopy, str(np.degrees(leftWingAngle)), (10,25), self.font, 1, (20,20,255), 3)
-            cv2.putText(imcopy, str(-1.0*np.degrees(rightWingAngle)), (512, 25), self.font, 1, (20,255,20), 3) 
+            cv2.putText(imcopy, str(np.degrees(final_leftWingAngle)), (10,25), self.font, 1, (20,20,255), 3)
+            cv2.putText(imcopy, str(-1.0*np.degrees(final_rightWingAngle)), (512, 25), self.font, 1, (20,255,20), 3) 
             cv2.putText(imcopy, str(framenumber), (850, 950), self.font, 1, (255,255,255), 3)
-
+            cv2.putText(imcopy, str(self.message), (10,950), self.font, 1, (0,255,255),2)
             cv2.imwrite(self._tempdir+'_tmp%05d.png'%(framenumber), imcopy) 
         cv2.destroyAllWindows()
         
@@ -502,10 +620,11 @@ class WingDetector(object):
         
         #print framenumber,  "\tL: ", ("%.2f" % np.degrees(leftWingAngle)), ("%.2f" % leftWingLength), '\tR: ', ("%.2f" % (-1.0*np.degrees(rightWingAngle))), ("%.2f" % rightWingLength), '\t',("%.2f" % distance), '\t', str(self.dTarget.asof(timestamp_FMT)), '\t', self.flipped
         
-        self.wingData.loc[framenumber] = [bodyEllipse[2], leftWingAngle, leftWingLength,  LENGTH,   -1.0*rightWingAngle, rightWingLength, timestamp, WIDTH]
- 
-        
-        return bodyEllipse[2], leftWingLength, leftWingAngle, LENGTH, rightWingLength,  -1.0*rightWingAngle, timestamp, WIDTH
+        self.wingData.loc[framenumber] = [body_angle, final_leftWingAngle, final_leftWingLength,  LENGTH,   -1.0*final_rightWingAngle, final_rightWingLength, timestamp, WIDTH]
+        self.tracking_info.loc[framenumber] = [final_leftWingAngle, final_leftWingArea, final_rightWingAngle, final_rightWingArea, head[0], head[1], body_angle]
+        self.error_count = 0
+        self.message = ""
+        return body_angle, final_leftWingLength, final_leftWingAngle, LENGTH, final_rightWingLength,  -1.0*final_rightWingAngle, timestamp, WIDTH
 
         
                 
@@ -549,10 +668,6 @@ class WingDetector(object):
 		    L = list(merge(recur(L[:split]), recur(L[split:])))
 
 		    # Find possible closest pair across split line
-		    # Note: this is not quite the same as the algorithm described in class, because
-		    # we use the global minimum distance found so far (best[0]), instead of
-		    # the best distance found within the recursive calls made by this call to recur().
-		    # This change reduces the size of E, speeding up the algorithm a little.
 		    #
 		    E = [p for p in L if abs(p[0]-splitx) < best[0]]
 		    for i in range(len(E)):
@@ -609,15 +724,22 @@ class WingDetector(object):
     def get_tracking_thresholds(self, _timestamp, _distance, _dTarget):
 
         if _dTarget <= 20:
-            return (80,1,1), (113,1,2), (35,1,1)
+            vals = (80,1,1), (113,1,2), (35,1,1)
         elif _distance <=120:
-            return (70,1,1), (110,1,2), (40,1,1)
+            vals =  (70,1,1), (110,1,2), (40,1,1)
         elif _distance <=150:
-            return (70,1,1), (95,1,2), (40,1,1)
+            vals =  (70,1,1), (95,1,2), (40,1,1)
         elif _distance <=185:
-            return (60,1,1), (80,1,2), (30,1,1)
+            vals = (60,1,1), (85,1,2), (30,1,1) #(60,1,1), (80,1,2), (30,1,1)
         else:
-            return (50,1,2), (79,1,2), (35,1,1)       
+            vals = (55,1,2), (83,1,2), (35,1,1) #(50,1,1), (79,1,2), (35,1,1)   
+            
+        foo = self.add_nested_tuples(vals, self.adjust_tracking_parameters)
+        
+        return foo   
+
+    def add_nested_tuples(self, set1, set2):
+        return tuple(map(lambda x, y: tuple(map(lambda w,z: w+z, x,y)), set1, set2))
 
     def get_nearest_and_furthest_from_centroid(self, hullset, centroid):
         #PASS A SET OF POINTS DEFINING A SINGLE CONTOUR, IDEALLY OUTPUT FROM cv2.convexHull
@@ -747,6 +869,14 @@ class WingDetector(object):
         new_x = FRONTPOINT[0] + delta_x/abs(delta_x)*1000
         new_y = FRONTPOINT[1] + delta_y/abs(delta_y)*1000
         return (new_x, new_y)
+
+    def angle_from_vertical(self, point1, point2):
+        """
+        RETURNS A VALUE IN DEGREES BETWEEN 0 AND 360, WHERE 0 AND 360 ARE NORTH ORIENTATION.
+        """
+        x = point1[0] - point2[0]
+        y = point1[1] - point2[1]
+        return 180.0 + math.atan2(x,y)*180.0/np.pi
 
 
 

@@ -287,13 +287,13 @@ def sync_jaaba_with_ros(FMF_DIR):
             wings.execute()
             wings.wingData.columns= ['BodyAxis','leftAngle','leftWingLength','Length','rightAngle','rightWingLength','Timestamp','Width']
             wings.wingData.to_pickle(FMF_DIR + '/wingdata.pickle')
-
+            wings.tracking_info.to_pickle(FMF_DIR + '/tracking_info.pickle')
             datadf = DataFrame(wings.wingData)
         
         
             if MAKE_MOVIES:
-                utilities.call_command("ffmpeg -f image2 -r 15 -i "+ TRACKING_DIRECTORY + "_tmp%05d.png -vf 'scale=iw/2:-1' -vcodec mpeg4 -b 8000k -y " + FMF_DIR + "'/tracked_movie.mp4'")
-                utilities.delete_temp_files(TRACKING_DIRECTORY)
+                utilities.call_command("ffmpeg -f image2 -r 15 -i "+ TRACKING_DIRECTORY + "_tmp%05d.png -vf scale=iw/2:-1 -vcodec mpeg4 -b 8000k -y " + FMF_DIR + "/tracked_movie.mp4;")
+                utilities.call_command("rm -r " + TRACKING_DIRECTORY)
                 #wings.make_movie(wings._tempdir, wings.fmf_file.rsplit('/',1)[0]+'/tracked_movie.mp4',15)
             
         except Exception,e:
@@ -390,8 +390,14 @@ def sync_jaaba_with_ros(FMF_DIR):
         targets.plot_trajectory_and_wingext(datadf, BAG_FILE, LIGHTS_ON, END,'7-light', background=False)
         
     """
-    targets.plot_trajectory_and_wingext(datadf, BAG_FILE)
     
+    try:
+        targets.plot_trajectory_and_wingext(datadf, BAG_FILE)
+    except Exception,e:
+            traceback.print_exc() 
+            print 'ERROR generating targeting plot:', FMF_DIR
+            print str(e)
+            
     ### ABDOMINAL BENDING   ###
     #datadf[datadf['Length'] > 110] = np.nan  #discard frames with bogus length.  *************
     #datadf[datadf['Length'] < 60] = np.nan  #discard frames with bogus length.
@@ -503,6 +509,9 @@ def plot_single_trace(datadf):
     return fig
 
 def plot_data(means, sems, ns, measurement):
+    means = means[means[measurement].notnull()]
+    #ns = ns[ns[measurement].notnull()]
+    #sems = sems[sems[measurement].notnull()]
     fig = plt.figure()
     group_number = 0
     ax = fig.add_subplot(1,1,1)
@@ -515,7 +524,7 @@ def plot_data(means, sems, ns, measurement):
         nsems = []
         laser_x = []
         for w in means.ix[x].index:
-            if ns.ix[x]['FlyID'][w] >= ((max_n)-2): #(max_n/3):
+            if ns.ix[x]['FlyID'][w] >= ((max_n)/3): #(max_n/3):
                 laser_x.append((w-pd.to_datetime(0)).total_seconds())
                 #print ns.ix[x]['FlyID'][w]
                 x_values.append((w-pd.to_datetime(0)).total_seconds())
@@ -630,7 +639,7 @@ if __name__ == "__main__":
 
     binsize = (args.binsize)
     print "BINSIZE: ", binsize
-    colourlist = ['#333333','#0033CC',  '#AAAAAA','#0032FF','r','c','m','y', '#000000']
+    colourlist = ['#333333','#0033CC', '#AAAAAA','#6699FF', '#202020','#0032FF','r','c','m','y', '#000000']
 
     #filename = '/tier2/dickson/bathd/FlyMAD/DATADIR_tracking/140927/wing_angles_nano.csv'
     #binsize = '5s'  # ex: '1s' or '4Min' etc
@@ -665,12 +674,14 @@ if __name__ == "__main__":
                 p = Process(target=sync_jaaba_with_ros, args=(_filelist[directory],))
                 p.start()
                 threadcount +=1
-            
-            if threadcount >=8:
-                threadcount = 0
-                p.join()
-            elif _filelist[directory] == _filelist[-1]:
-                p.join()
+                
+                if p.is_alive():
+                    if threadcount >=8:
+                        threadcount = 0
+                        p.join()
+                    elif _filelist[directory] == _filelist[-1]:
+                        threadcount=0
+                        p.join()
 
             
 

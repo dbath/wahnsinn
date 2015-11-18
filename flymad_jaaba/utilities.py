@@ -10,6 +10,7 @@ from scipy.signal import argrelextrema
 import math
 import subprocess
 import sh
+import shutil
 
 
 def find_files(directory, pattern):
@@ -19,8 +20,11 @@ def find_files(directory, pattern):
                 filename = os.path.join(root, basename)
                 yield filename
 
-def call_command(command):
-    subprocess.Popen(command.split(' '))
+def call_command(command, should_I_wait=True):
+    foo = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if should_I_wait:
+        output = foo.communicate()
+    return foo
 
 def delete_temp_files(DIR):
     shutil.rmtree(DIR)
