@@ -16,7 +16,7 @@ class Experiment:
                                             latch=True) #latched so message is guarenteed to arrive      
         #configure the lasers
         self._ir_laser_conf.publish(enable=True,   #always enabled, we turn it on/off using /experiment/laser
-                                 frequency=25.0,      
+                                 frequency=0.0,      
                                  intensity=0.0)    #full power
         
 
@@ -24,7 +24,7 @@ class Experiment:
         self._red_laser_conf = rospy.Publisher('/flymad_micro/laser2/configuration',
                                             flymad.msg.LaserConfiguration,
                                             latch=True) #latched so message is guarenteed to arrive
-        self._red_laser_conf.publish(enable=True, frequency=16,intensity=0.0)
+        self._red_laser_conf.publish(enable=True, frequency=25,intensity=0.0)
 
         #Ambient light is connected to 'LASER0'
         self._ambient_conf = rospy.Publisher('/flymad_micro/laser0/configuration',
@@ -51,13 +51,13 @@ class Experiment:
         return foo
 
     def run(self):
-        T_WAIT          = 40
-        RED_BOUTS        = 6
-        T_RED_ON         = 5
-        T_RED_OFF        = 5
-        T_WAIT2         = 40
-        T_IR           = 60
-        T_WAIT3         = 600
+        T_WAIT          = 60
+        IR_BOUTS        = 3
+        T_IR_ON         = 15
+        T_IR_OFF        = 5
+        T_RED           = 20
+        T_WAIT2         = 60
+        T_WAIT3         = 180
 
         RED_LASER = LASER2_ON
         IR_LASER  = LASER1_ON
@@ -82,25 +82,40 @@ class Experiment:
                     else:
                         rospy.loginfo("...WAITING FOR ACCURATE TARGETING TO INITIATE STIMULUS")
                         continue
-                for x in range(RED_BOUTS):
-                    rospy.loginfo('RED ON')
-                    self._laser(RED_LASER | LASER0_ON)
-                    rospy.sleep(T_RED_ON)
+                for x in range(IR_BOUTS):
+                    rospy.loginfo('IR on '+ str( x+1))
+                    self._laser(IR_LASER | LASER0_ON)
+                    rospy.sleep(T_IR_ON)
                     self._laser(LASER0_ON)
-                    rospy.loginfo('RED OFF')
-                    rospy.sleep(T_RED_OFF)
+                    print '\a'  
+                    rospy.sleep(T_IR_OFF)
                 #turn off
                 rospy.loginfo('Off')
                 self._laser(LASER0_ON)
                 rospy.sleep(T_WAIT2)
-                #turn on IR
-                rospy.loginfo('IR')
-                self._laser(IR_LASER | LASER0_ON)
-                rospy.sleep(T_IR)
+                print '\a'
+                #turn on red
+                rospy.loginfo('Red')
+                self._laser(RED_LASER | LASER0_ON)
+                rospy.sleep(T_RED)
                 #turn off all
+                print '\a'
                 rospy.loginfo('Off')
                 self._laser(LASER0_ON)
                 rospy.sleep(T_WAIT3)
+                for x in range(IR_BOUTS):
+                    rospy.loginfo('IR on '+ str(x+1))
+                    self._laser(IR_LASER | LASER0_ON)
+                    rospy.sleep(T_IR_ON)
+                    self._laser(LASER0_ON)
+                    print '\a'  
+                    rospy.sleep(T_IR_OFF)
+                #turn off
+                rospy.loginfo('Off')
+                self._laser(LASER0_ON)
+                rospy.sleep(T_WAIT3)
+
+                
                 repeat += 1
 
                 print '\a', 'EXPERIMENT FINISHED'

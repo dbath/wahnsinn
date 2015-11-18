@@ -6,7 +6,7 @@ import rospy
 import flymad.msg
 import flymad.srv
 
-from flymad.constants import LASERS_ALL_OFF, LASER2_ON, LASER1_ON, LASER0_ON
+from flymad.constants import LASERS_ALL_OFF, LASER2_ON, LASER1_ON
 
 class Experiment:
     def __init__(self):
@@ -16,7 +16,7 @@ class Experiment:
                                             latch=True) #latched so message is guarenteed to arrive      
         #configure the lasers
         self._ir_laser_conf.publish(enable=True,   #always enabled, we turn it on/off using /experiment/laser
-                                 frequency=25.0,      
+                                 frequency=0.0,      
                                  intensity=0.0)    #full power
         
 
@@ -26,16 +26,11 @@ class Experiment:
                                             latch=True) #latched so message is guarenteed to arrive
         self._red_laser_conf.publish(enable=True, frequency=16,intensity=0.0)
 
-        #Ambient light is connected to 'LASER0'
-        self._ambient_conf = rospy.Publisher('/flymad_micro/laser0/configuration',
-                                            flymad.msg.LaserConfiguration,
-                                            latch=True)
-        self._ambient_conf.publish(enable=True, frequency=0, intensity=0.0)
         #ensure the targeter is running so we can control the laser
         rospy.loginfo('waiting for targeter')
         rospy.wait_for_service('/experiment/laser')
         self._laser = rospy.ServiceProxy('/experiment/laser', flymad.srv.LaserState)
-        self._laser(LASER0_ON)
+        self._laser(LASERS_ALL_OFF)
 
         self._OK_to_initialize = 0
         self._tracking_accuracy = rospy.Subscriber('/flymad/tracked', 
@@ -84,23 +79,17 @@ class Experiment:
                         continue
                 for x in range(RED_BOUTS):
                     rospy.loginfo('RED ON')
-                    self._laser(RED_LASER | LASER0_ON)
+                    self._laser(RED_LASER)
                     rospy.sleep(T_RED_ON)
-                    self._laser(LASER0_ON)
+                    self._laser(LASERS_ALL_OFF)
                     rospy.loginfo('RED OFF')
                     rospy.sleep(T_RED_OFF)
                 #turn off
                 rospy.loginfo('Off')
-                self._laser(LASER0_ON)
-                rospy.sleep(T_WAIT2)
-                #turn on IR
-                rospy.loginfo('IR')
-                self._laser(IR_LASER | LASER0_ON)
-                rospy.sleep(T_IR)
-                #turn off all
-                rospy.loginfo('Off')
-                self._laser(LASER0_ON)
+                self._laser(LASERS_ALL_OFF)
                 rospy.sleep(T_WAIT3)
+
+                
                 repeat += 1
 
                 print '\a', 'EXPERIMENT FINISHED'
@@ -117,7 +106,7 @@ class Experiment:
             #the node was cleanly killed
             pass
 
-        self._laser(LASER0_ON)
+        self._laser(LASERS_ALL_OFF)
 
 if __name__ == "__main__":
     rospy.init_node('experiment')
