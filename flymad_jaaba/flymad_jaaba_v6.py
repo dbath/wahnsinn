@@ -330,6 +330,9 @@ def sync_jaaba_with_ros(FMF_DIR):
     
     
     datadf['Timestamp'] = datadf.index #silly pandas bug for subtracting from datetimeindex...
+    
+    number_of_bouts, bout_duration, first_TS, last_TS = utilities.detect_stim_bouts(datadf, 'Laser1_state')
+    
     try:
         datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp[(datadf.Laser2_state + datadf.Laser1_state) > 0.001].index[0]
     except:
@@ -342,6 +345,12 @@ def sync_jaaba_with_ros(FMF_DIR):
     datadf['maxWingAngle'] = get_absmax(datadf[['leftAngle','rightAngle']])
     datadf['maxWingLength'] = get_absmax(datadf[['leftWingLength','rightWingLength']])
     #datadf[datadf['maxWingAngle'] > 3.1] = np.nan
+
+    number_of_bouts, stim_duration, first_TS, last_TS = utilities.detect_stim_bouts(datadf, 'Laser2_state')  #HACK DANNO
+    datadf['stim_duration'] = stim_duration
+
+
+
     """
     program = 'dark'
     
@@ -435,10 +444,14 @@ def plot_latency_to_courtship(list_of_latencies):
     df = DataFrame(list_of_latencies, columns=['genotype', 'latency'])
     means = df.groupby('genotype').mean()
     fig = plt.figure()
-    
+
+def find_nearest(array,value):
+    idx = (np.abs(array-value)).argmin()
+    return array[idx]     
     
 def gather_data(filelist):
     datadf = DataFrame()
+    intvals = np.array([0, 200, 2000, 20000]) #6310
     for x in filelist:
         print x
         FLY_ID = x.split('/')[-1].split('_fly.')[0]
@@ -450,7 +463,16 @@ def gather_data(filelist):
         if WEI < WEI_THRESHOLD:
             print FLY_ID, " excluded from analysis, with wing extension index: " , WEI , "."
             continue
-        fx['group'] = EXP_ID
+        if DOSE_RESPONSE:
+            try:
+                number_of_bouts, bout_duration, first_TS, last_TS = utilities.detect_stim_bouts(fx, 'Laser2_state')
+            except:
+                number_of_bouts = 1
+            
+            stim_duration = find_nearest(intvals, fx['stim_duration'][0])
+            fx['group'] = str(number_of_bouts) + 'x_' + str(stim_duration) + 'ms'
+        else:
+            fx['group'] = EXP_ID
         fx['FlyID'] = FLY_ID
         datadf = pd.concat([datadf, fx])
     datadf.to_csv(DATADIR + HANDLE + '_rawdata_' + binsize + '.csv', sep=',')
@@ -516,16 +538,18 @@ def plot_data(means, sems, ns, measurement):
     group_number = 0
     ax = fig.add_subplot(1,1,1)
     y_range = []
+    x_range = []
+    laser_x = []
     for x in means.index.levels[0]:
         max_n = ns.ix[x]['FlyID'].max()
         x_values = []
         y_values = []
         psems = []
         nsems = []
-        laser_x = []
         for w in means.ix[x].index:
+            laser_x.append((w-pd.to_datetime(0)).total_seconds())
             if ns.ix[x]['FlyID'][w] >= ((max_n)/3): #(max_n/3):
-                laser_x.append((w-pd.to_datetime(0)).total_seconds())
+                x_range.append((w-pd.to_datetime(0)).total_seconds())
                 #print ns.ix[x]['FlyID'][w]
                 x_values.append((w-pd.to_datetime(0)).total_seconds())
                 y_values.append(means.ix[x,w][measurement])
@@ -552,8 +576,6 @@ def plot_data(means, sems, ns, measurement):
                             color=colourlist[group_number],
                             )
         group_number += 1
-    ax.set_xlim((np.amin(x_values),np.amax(x_values)))
-    ax.set_ylim(0.85*(np.amin(y_range)),1.15*(np.amax(y_range)))
     if 'maxWingAngle' in measurement:
         ax.set_ylabel('Mean maximum wing angle (rad)' + ' ' + u"\u00B1" + ' SEM', fontsize=16)   # +/- sign is u"\u00B1"
     elif 'dtarget' in measurement:
@@ -563,15 +585,20 @@ def plot_data(means, sems, ns, measurement):
         ax.set_ylabel('Mean ' + measurement  + ' ' + u"\u00B1" + ' SEM', fontsize=16)
         
     ax.set_xlabel('Time (s)', fontsize=16)      
-      
+    
+    #laser_x =  means.index.levels[1][(means.index.levels[1] > pd.to_datetime(np.amin(x_range)*1e9)) & (means.index.levels[1] < pd.to_datetime(np.amax(x_range)*1e9))]
+     
     if args.plot_ambient == True:
-        laser_0 = collections.BrokenBarHCollection.span_where(laser_x, ymin=0.85*(means[measurement].min()), ymax=1.15*(means[measurement].max()), where=datadf['Laser0_state'] == 0, facecolor='#BBBBBB', linewidth=0, edgecolor=None, alpha=1.0, zorder=10)
+        laser_0 = collections.BrokenBarHCollection.span_where(laser_x, ymin=0.85*(means[measurement].min()), ymax=1.15*(means[measurement].max()), where=means['Laser0_state'] == 0, facecolor='#BBBBBB', linewidth=0, edgecolor=None, alpha=1.0, zorder=10)
         ax.add_collection(laser_0)
+    
         
     laser_1 = collections.BrokenBarHCollection.span_where(laser_x, ymin=0.85*(means[measurement].min()), ymax=1.15*(means[measurement].max()), where=means['Laser1_state'] > 0.1, facecolor='#DCDCDC', linewidth=0, edgecolor=None, alpha=1.0, zorder=10) #green b2ffb2
     ax.add_collection(laser_1)
     laser_2 = collections.BrokenBarHCollection.span_where(laser_x, ymin=0.85*(means[measurement].min()), ymax=1.15*(means[measurement].max()), where=means['Laser2_state'] > 0.1, facecolor='#FFB2B2', linewidth=0, edgecolor=None, alpha=1.0, zorder=10) #red FFB2B2
     ax.add_collection(laser_2)
+    ax.set_xlim((np.amin(x_range),np.amax(x_range)))
+    ax.set_ylim(0.85*(np.amin(y_range)),1.15*(np.amax(y_range)))
     
     
     l = plt.legend()
@@ -620,6 +647,8 @@ if __name__ == "__main__":
                             help="Make True if you want to plot the absence of ambient light from laser0.")
     parser.add_argument('--make_tracking_movie', type=str, required=False, default = False, 
                             help="Make True if you want to save annotated frames for tracking movies.")
+    parser.add_argument('--dose_response', type=str, required=False, default = False, 
+                            help="Make True if you want to group by stimulus paradigm.")
     
         
     args = parser.parse_args()
@@ -636,6 +665,7 @@ if __name__ == "__main__":
     POOL_EXP = [str(item) for item in args.pool_experiment.split(',')]
     #OUTPUT = args.outputdir
     COMPILE_FOLDERS = args.compile_folders
+    DOSE_RESPONSE = args.dose_response
 
     binsize = (args.binsize)
     print "BINSIZE: ", binsize
@@ -646,7 +676,7 @@ if __name__ == "__main__":
     #BAG_FILE = '/groups/dickson/home/bathd/Dropbox/140927_flymad_rosbag_copy/rosbagOut_2014-09-27-14-53-54.bag'
 
 
-    if 1:#COMPILE_FOLDERS == False:
+    if not COMPILE_FOLDERS:
         baglist = []
         for bag in glob.glob(BAGS + '/*.bag'):
             bagtimestamp = parse_bagtime(bag)
@@ -663,25 +693,24 @@ if __name__ == "__main__":
             os.makedirs(DATADIR + 'TRACES')
             
         updated = False
-        threadcount = 0
-        _filelist = []
-        for _directory in glob.glob(DATADIR + '*' + HANDLE + '*' + '*zoom*'):
-            _filelist.append(_directory)
+    threadcount = 0
+    _filelist = []
+    for _directory in glob.glob(DATADIR + '*' + HANDLE + '*' + '*zoom*'):
+        _filelist.append(_directory)
+    for directory in np.arange(len(_filelist)):    
+        FLY_ID, FMF_TIME, GROUP = parse_fmftime(_filelist[directory])
+        if not os.path.exists(DATADIR + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle') ==True:
+            p = Process(target=sync_jaaba_with_ros, args=(_filelist[directory],))
+            p.start()
+            threadcount +=1
             
-        for directory in np.arange(len(_filelist)):    
-            FLY_ID, FMF_TIME, GROUP = parse_fmftime(_filelist[directory])
-            if not os.path.exists(DATADIR + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle') ==True:
-                p = Process(target=sync_jaaba_with_ros, args=(_filelist[directory],))
-                p.start()
-                threadcount +=1
-                
-                if p.is_alive():
-                    if threadcount >=8:
-                        threadcount = 0
-                        p.join()
-                    elif _filelist[directory] == _filelist[-1]:
-                        threadcount=0
-                        p.join()
+            if p.is_alive():
+                if threadcount >=8:
+                    threadcount = 0
+                    p.join()
+                elif _filelist[directory] == _filelist[-1]:
+                    threadcount=0
+                    p.join()
 
             
 
