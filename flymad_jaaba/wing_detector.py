@@ -26,8 +26,8 @@ class WingDetector(object):
         self.bagdf = self.get_data_from_bag(self.bag_fn)
         self.bagdf = self.compute_body_axes(self.bagdf)
         self.positions = self.get_positions_from_bag(self.bag_fn)
-        self.positions.loc[self.positions['Px'] == 1000000].Px = np.nan
-        self.positions.loc[self.positions['Py'] == 1000000].Py = np.nan
+        self.positions.loc[self.positions['Px'] == 1000000, 'Px'] = np.nan
+        self.positions.loc[self.positions['Py'] == 1000000, 'Py'] = np.nan
         
         self.dTarget = dTarget
         (self.arena_centre) = arena_centre
@@ -47,33 +47,39 @@ class WingDetector(object):
         
         self.DEBUGGING_DIR = self.DEBUGGING_DIR + '/'
         self.error_count = 0
-        self.message = ""
+        self.ERROR_REPORTING = False
         
         self.font = cv2.FONT_HERSHEY_SIMPLEX
         
         self.previous_head_extended = None
         self.flipped = 0
         self.adjust_tracking_parameters = ((0,0,0),(0,0,0),(0,0,0))
-        self.ERROR_L= False
-        self.ERROR_R= False
+        self.total_errors = 0
        
         self.wingData = DataFrame({'BodyAxis':[],  'leftAngle':[], 'leftWingLength':[], 'Length':[],  'rightAngle':[],'rightWingLength':[], 'Timestamp':[],'Width':[]}, dtype=np.float64)            
 
-        self.tracking_info = DataFrame({'a_wingAngle_left':[],'a_wingArea_left':[],'b_wingAngle_right':[], 'b_wingArea_right':[], 'c_head_location_x':[],'c_head_location_y':[], 'd_bodyAxis':[]}, dtype=np.float64)
+        self.tracking_info = DataFrame({'a_wingAngle_left':[],'a_wingArea_left':[],'b_wingAngle_right':[], 'b_wingArea_right':[], 'c_head_location_x':[],'c_head_location_y':[], 'd_bodyAxis':[], 'e_wingOptions':[]}, dtype=np.float64)
     
     def execute(self):
     
         total_frames = self.fmf.get_n_frames()
         
-        progress = self.get_progress_bar("TRACKED", total_frames)
+        if not self.ERROR_REPORTING:
+            progress = self.get_progress_bar("TRACKED", total_frames) 
+        else:
+            pass
 
         for frame_number in range(0,total_frames,1):
-            progress.update(frame_number)
+            if self.ERROR_REPORTING:
+                progress = self.get_progress_bar("ERROR_RATE", 2*frame_number+1) 
+                progress.update(self.total_errors+1)   
+            else:
+                progress.update(frame_number) 
             self.ERROR_DETECTED= False
             self.error_count = 0
             self.adjust_tracking_parameters = ((0,0,0),(0,0,0),(0,0,0))
             self.detectWings(self.saveImage, False, frame_number)  #MAKE FIRST OPTION TRUE TO SAVE TRACKING MOVIES.
-
+        print self.fmf_file.split('/')[-1], 100.0*self.total_errors/total_frames, '% error rate'
         return
 
 
@@ -361,6 +367,10 @@ class WingDetector(object):
 
 
         if body_length >= 425:
+            imcopy = im.copy()
+            cv2.putText(imcopy, "ERROR", (480,530), self.font, 1, (255,255,255), 3)
+            if self.saveImage == True:
+                cv2.imwrite(self._tempdir+'_tmp%05d.png'%(framenumber), imcopy)
             self.wingData.loc[framenumber] = [np.nan, np.nan, np.nan,  np.nan,   np.nan, np.nan, timestamp, np.nan]
             return np.nan, np.nan, np.nan,  np.nan,   np.nan, np.nan, timestamp, np.nan
 
@@ -371,42 +381,57 @@ class WingDetector(object):
 
         wingTips, wholeWings, wingArea = [],[],[]
 
-        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, axisLine, wingTips, wholeWings, wingArea, timestamp_FMT, distance, targ_dist, ((0,0,0),(0,0,0),(0,0,0)))
-        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((0,0,0),(10,0,0),(0,0,0)))
-        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((0,0,0),(-10,0,0),(0,0,0)))
-        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((5,1,0),(5,0,0),(0,0,0)))
+        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length, axisLine, wingTips, wholeWings, wingArea, timestamp_FMT, distance, targ_dist, ((0,0,0),(0,0,0),(0,0,0)))
+        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((-10,0,0),(-10,0,0),(0,0,0)))
+        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((10,0,0),(10,0,0),(0,0,0)))
+        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((10,1,1),(10,0,1),(0,0,0)))
+        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((-10,1,1),(-10,0,1),(0,0,0)))
 
+        polynomial = np.poly1d([  1.47283629e-09,   7.10509872e-06,  -1.29235190e-02])
 
-        polynomial = np.poly1d([  9.21726165e-10,   1.44797851e-05,  -1.65264598e-02])
-
-
+        wingSets = pd.DataFrame({'Tips':wingTips, 'Shape':wholeWings, 'Area':wingArea, 'Theta':np.empty(len(wingTips)).fill(0)})
+        wingSets['Theta'] = np.nan
+        wingSets['Side'] = np.nan
+        wingSets['Length'] = np.nan
         
-        wingSets = pd.DataFrame({'Tips':wingTips, 'Shape':wholeWings, 'Area':wingArea})
+        wingSets.to_pickle('/groups/dickson/home/bathd/Desktop/wingsets.pickle')
         
-
-    
-        wingSets['Theta'] = self.compute_angle_given_three_points(backPoint, wingSets['Tips'], centroid)
-        wingSets[wingSets['Theta'] >=np.pi]['Theta'] = wingSets[wingSets['Theta'] >=np.pi]['Theta'] -2.0*np.pi
-        wingSets[wingSets['Theta'] <=-1.0*np.pi]['Theta'] = wingSets[wingSets['Theta'] <=-1.0*np.pi]['Theta'] +2.0*np.pi
-        wingSets[wingSets['Theta'] < 0.0]['Side'] = 'Right'
-        wingSets[wingSets['Theta'] >= 0.0]['Side'] = 'Left'
-        wingSets[wingSets['Side'] == 'Right']['Theta'] = -1.0*(wingSets[wingSets['Side'] == 'Right']['Theta'])
-        wingSets['Length'] = self.get_distance_between_coords(backpoint, wingSets['Tips'])
-        wingSets['polydif'] = wingSets['Theta'] - polynomial(wingSets['Area'])
+        for x in np.arange(len(wingSets)):
+            wingSets.loc[x,'Theta'] = self.compute_angle_given_three_points(backPoint, wingSets.loc[x,'Tips'], centroid)
+            wingSets.loc[x,'Length'] = self.get_distance_between_coords(backPoint, wingSets.loc[x,'Tips'])
+        wingSets.loc[wingSets['Theta'] >=np.pi,'Theta'] -= 2.0*np.pi
+        wingSets.loc[wingSets['Theta'] <=-1.0*np.pi,'Theta'] += 2.0*np.pi
+        wingSets.loc[wingSets['Theta'] < 0.0, 'Side'] = 'Right'
+        wingSets.loc[wingSets['Theta'] >= 0.0, 'Side'] = 'Left'
+        wingSets.loc[wingSets['Side'] == 'Right','Theta'] *= -1.0
+        wingSets['polydif'] = (wingSets['Theta'] - polynomial(wingSets['Area'])) 
                         
-        wingSets = wingSets[(wingSets['Length'] >=225) & (wingSets['Length'] < 350)]
-        wingSets = wingSets[(wingSets['polydif'] >= -0.4) & (wingSets['polydif'] <= 0.4)]
+        wingSets = wingSets[(wingSets['Length'] >=235) & (wingSets['Length'] < 350)]
+        wingSets = wingSets[(wingSets['Theta'] <= (np.pi)/2.0 )]
+        wingSets = wingSets[(wingSets['polydif'] >= -0.4) & (wingSets['polydif'] <= 0.6)]
+        wingSets = wingSets[(wingSets['Area'] >= 2000) & (wingSets['Area'] <= 35000)]
 
+        
         try:
-            leftWing = wingSets.ix[wingSets[wingSets['Side']=='Left']['polydif'].abs().idxmin()]
+            #leftWing = wingSets.ix[wingSets[wingSets['Side']=='Left']['polydif'].abs().idxmin()]
+            leftWing = wingSets.ix[wingSets[wingSets['Side']=='Left']['Area'].abs().idxmax()]
         except:
             leftWing = wingSets[0:0]
             leftWing.ix[0] = np.nan
+            leftWing.set_value(0,'Tips',tuple(tail))
+            leftWing.set_value(0,'Shape',[[0,0]])
+            leftWing = leftWing.ix[0]
+            self.total_errors += 1
         try:
-            rightWing = wingSets.ix[wingSets[wingSets['Side']=='Right']['polydif'].abs().idxmin()]
+            #rightWing = wingSets.ix[wingSets[wingSets['Side']=='Right']['polydif'].abs().idxmin()]
+            rightWing = wingSets.ix[wingSets[wingSets['Side']=='Right']['Area'].abs().idxmax()]
         except:
             rightWing = wingSets[0:0]
             rightWing.ix[0] = np.nan
+            rightWing.set_value(0,'Tips',tuple(tail))
+            rightWing.set_value(0,'Shape',[[0,0]])
+            rightWing = rightWing.ix[0]
+            self.total_errors +=1
 
 
         """        
@@ -449,7 +474,7 @@ class WingDetector(object):
             cv2.circle(imcopy, (int(backPoint[0]),int(backPoint[1])), 5, (255,255,255), -1)
             #cv2.circle(imcopy, (int(centroid[0]),int(centroid[1])), 3, (255,0,255), -1)
             cv2.putText(imcopy, str(np.degrees(leftWing.Theta)), (10,25), self.font, 1, (20,20,255), 3)
-            cv2.putText(imcopy, str(-1.0*np.degrees(rightWing.Theta)), (512, 25), self.font, 1, (20,255,20), 3)
+            cv2.putText(imcopy, str(np.degrees(rightWing.Theta)), (512, 25), self.font, 1, (20,255,20), 3)
             cv2.putText(imcopy, str(framenumber), (850, 950), self.font, 1, (255,255,255), 3)
             cv2.imwrite(self._tempdir+'_tmp%05d.png'%(framenumber), imcopy) 
         cv2.destroyAllWindows()
@@ -457,12 +482,16 @@ class WingDetector(object):
         
         #print framenumber,  "\tL: ", ("%.2f" % np.degrees(leftWingAngle)), ("%.2f" % leftWingLength), '\tR: ', ("%.2f" % (-1.0*np.degrees(rightWingAngle))), ("%.2f" % rightWingLength), '\t',("%.2f" % distance), '\t', str(self.dTarget.asof(timestamp_FMT)), '\t', self.flipped
         
-        self.wingData.loc[framenumber] = [body_angle, final_leftWingAngle, final_leftWingLength,  LENGTH,   -1.0*final_rightWingAngle, final_rightWingLength, timestamp, WIDTH]
-        self.tracking_info.loc[framenumber] = [final_leftWingAngle, final_leftWingArea, final_rightWingAngle, final_rightWingArea, head[0], head[1], body_angle]
+        self.wingData.loc[framenumber] = [body_angle, leftWing.Theta, leftWing.Length,  body_length,
+                                          rightWing.Theta, rightWing.Length, timestamp, WIDTH]
+        self.tracking_info.loc[framenumber] = [leftWing.Theta, leftWing.Area, rightWing.Theta, 
+                                               rightWing.Area, head[0], head[1], body_angle, len(wingTips)]
 
-        return body_angle, final_leftWingLength, final_leftWingAngle, LENGTH, final_rightWingLength,  -1.0*final_rightWingAngle, timestamp, WIDTH
+        return body_angle, leftWing.Length, leftWing.Theta, body_length, rightWing.Length,  rightWing.Theta, timestamp, WIDTH
 
-    def get_candidate_wings(self, imgray, kernel, headLine, centroid, axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, parameter_adjustment):
+    
+    
+    def get_candidate_wings(self, imgray, kernel, headLine, centroid, backPoint, body_length, abd_length, axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, parameter_adjustment):
         
         self.adjust_tracking_parameters = parameter_adjustment
 
