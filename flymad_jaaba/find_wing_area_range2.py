@@ -13,8 +13,8 @@ for x in glob.glob('/nearline/dickson/bathd/FlyMAD_data_archive/P1_adt2_sequenti
     df = pd.read_pickle(x)
     lefty = df[df.a_wingAngle_left.notnull()]
     righty = df[df.b_wingAngle_right.notnull()]
-    left = pd.DataFrame({'angle':lefty.a_wingAngle_left, 'area':lefty.a_wingArea_left})
-    right = pd.DataFrame({'angle':-1.0*righty.b_wingAngle_right, 'area':righty.b_wingArea_right})
+    left = pd.DataFrame({'angle':abs(lefty.a_wingAngle_left), 'area':lefty.a_wingArea_left})
+    right = pd.DataFrame({'angle':abs(righty.b_wingAngle_right), 'area':righty.b_wingArea_right})
     datadf = pd.concat([datadf, left, right])
     flies +=1
 
@@ -43,7 +43,7 @@ polynomial2 = np.poly1d(coefficients2)
 xs = np.linspace(0, datadf.area.max(), 1000)
 ys = polynomial2(xs)
 
-datadf['polydif'] = polynomial2(datadf['area']) - datadf['angle']
+datadf['polydif'] = (polynomial2(datadf['area']) - datadf['angle']) 
 
 print coefficients2
 
