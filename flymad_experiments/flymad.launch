@@ -6,8 +6,8 @@
 
   <param name="/ttm/px" type="double" value="-0.6" />
   <param name="/ttm/py" type="double" value="-0.6" />
-  <param name="/ttm/pv" type="double" value="0.08" />
-  <param name="/ttm/latency" type="double" value="0.1" />
+  <param name="/ttm/pv" type="double" value="0.00" />
+  <param name="/ttm/latency" type="double" value="0.0" />
 
   <param name="/ttm/headtrack_downsample" type="int" value="4" />
   <param name="/ttm/headtrack_mincontourarea" type="int" value="1000" />
