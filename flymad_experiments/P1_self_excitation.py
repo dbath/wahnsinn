@@ -6,6 +6,8 @@ import rospy
 import flymad.msg
 import flymad.srv
 import argparse
+import numpy as np
+
 
 from flymad.constants import LASERS_ALL_OFF, LASER0_ON, LASER1_ON, LASER2_ON
 
@@ -21,7 +23,7 @@ class Experiment:
                                             latch=True) #latched so message is guarenteed to arrive
         #configure the laser
         self._red_laser_conf.publish(enable=True,      #always enabled, we turn it on/off using /experiment/laser
-                                 frequency=0,      #constant (not pulsed)
+                                 frequency=25.0,      #constant (not pulsed)
                                  intensity=1.0)    #full power
         #Ambient light is connected to 'LASER0'
         self._ambient_conf = rospy.Publisher('/flymad_micro/laser0/configuration',
@@ -33,6 +35,7 @@ class Experiment:
         rospy.wait_for_service('/experiment/laser')
         self._laser = rospy.ServiceProxy('/experiment/laser', flymad.srv.LaserState)
         self._laser(LASER0_ON)
+        self.stimcount = 0
 
         #the position of the currently targeted object is sent by the targeter. In the
         #case of a single fly, the default behaviour of the targeter is to target the
@@ -47,9 +50,18 @@ class Experiment:
     def on_targeted(self, msg):
         #target flies in the right half of the arena
         if np.sqrt((self.center[0]-msg.fly_x)**2 + (self.center[1]-msg.fly_y)**2) < self.radius:
-            rospy.loginfo('targeting fly %s' % msg.obj_id)
+            rospy.loginfo('targeting fly %s' % msg.obj_id + '\t' +  str(self.stimcount))
             self._laser(LASER0_ON | LASER2_ON)
+            
+            """if self.stimcount >= 300:
+                self._laser(LASER0_ON)
+                rospy.sleep(10)
+                self.stimcount = 0
+            else:
+                self.stimcount += 1
+            """        
         else:
+            
             self._laser(LASER0_ON)
 
     def run(self):
@@ -71,9 +83,9 @@ if __name__ == "__main__":
     parser.add_argument('--recoverlength', type=float, required=False, default=5,
                             help='duration of recovery in seconds') 
     parser.add_argument('--center', nargs=2, metavar=('center_x','center_y'),
-                        default=(320, 240), help='the (X,Y) location of the arena center')
+                        default=(302, 233), help='the (X,Y) location of the arena center')
     parser.add_argument('--radius', type=float,
-                        default=100.0, help='the radius of the activation zone')
+                        default=22.0, help='the radius of the activation zone')
     args = parser.parse_args()
     
     
