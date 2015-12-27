@@ -52,7 +52,7 @@ class FlyPanel(object):
         
         self._plot_overlays = plot_overlays
         
-        self._expdir = fmf_dir.rsplit('/', 1)[0]
+        self._expdir = fmf_dir.rsplit('/', 2)[0]
         
         
         self._bag = utilities.match_fmf_and_bag(self._fmf_dir, (self._expdir + '/BAGS'))

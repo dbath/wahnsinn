@@ -8,6 +8,7 @@ import random
 import os
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import argparse
 
 
 
@@ -92,8 +93,8 @@ def detect_proboscis(headImage):
                                   ].ix[candidate_pros['score'].argmax()]
     except:
         proboscis = pd.Series({'area':0.0,'cx':width/2,'cy':height/2,'dCentre':0, 'length':0, 'tipAngle':0, 'tip_x':width/2, 'tip_y':height/2})
-    return proboscis, eroded, candidate_pros
-
+    return proboscis
+    
 def get_nearest_and_furthest_from_point(hullset, centroid):
     #PASS A SET OF POINTS DEFINING A SINGLE CONTOUR, IDEALLY OUTPUT FROM cv2.convexHull
     lowest_distance = 1000000
@@ -152,24 +153,37 @@ def get_head_image(frame, slyce):
     rat = data[75:95, 65:85].mean() / data[35:55, 65:85].mean()
     return data
     
-height = 150
-width = 150
-_data = np.zeros((height, width), np.float32)
-template = np.load('/groups/dickson/home/bathd/wahnsinn/flymad_jaaba/template_files/head_template_gen2.npy')
 
-
-for x in glob.glob('/nearline/dickson/bathd/FlyMAD_data_archive/P1_adt2_sequential_activation/150513/*zoom*/*.fmf'):
-    if os.path.exists(x.rsplit('/',1)[0]+'/tracking_info.pickle') ==True:
-        print x
-        _data = get_heads(x)
-        
-
-plt.imshow(_data, cmap = cm.Greys_r)
-plt.axis('off')
-plt.show()
 
 #-----------------------------
-
+def track_proboscis(fmf_file, tracking_file):
+    s = pd.DataFrame({'area':[],'cx':[],'cy':[],'dCentre':[],'length':[],'tipAngle':[],  'tip_x':[], 'tip_y':[]})
+    fmf = FMF.FlyMovie(fmf_file)
+    tracking = pd.read_pickle(tracking_file)
+    
+    if not os.path.exists(fmf_file.rsplit('/',1)[0] + '/proboscis_movie'):
+        os.makedirs(fmf_file.rsplit('/',1)[0] + '/proboscis_movie')
+    
+    
+    for framenumber in range(0,fmf.get_n_frames()):
+        try:
+            head = get_head_image(fmf.get_frame(framenumber)[0], tracking.ix[framenumber])
+        except:
+            head = get_head_image(fmf.get_frame(framenumber)[0], tracking.ix[0])
+        pro = detect_proboscis(head)
+        s.loc[framenumber] = pro
+        
+        imcopy = head.copy()
+        try:
+            cv2.line(imcopy, (75,75), (int(pro.tip_x),int(pro.tip_y)), (255,255,0),2)
+        except:
+            cv2.putText(imcopy, 'X' , (10, 70),cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
+        cv2.putText(imcopy, str(framenumber), (10, 25),cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
+        cv2.imwrite(fmf_file.rsplit('/',1)[0] + '/proboscis_movie/_tmp%05d.png'%(framenumber), imcopy)
+    s.to_pickle(fmf_file.rsplit('/',1)[0] + '/proboscis_data.pickle')
+    return s
+#-----------------------------
+"""
 s = pd.DataFrame({'area':[],'cx':[],'cy':[],'dCentre':[],'length':[],'tipAngle':[],  'tip_x':[], 'tip_y':[]})
 for framenumber in range(0,fmf.get_n_frames()):
     try:
@@ -186,7 +200,13 @@ for framenumber in range(0,fmf.get_n_frames()):
         cv2.putText(imcopy, 'X' , (10, 70),cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
     cv2.putText(imcopy, str(framenumber), (10, 25),cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
     cv2.imwrite('/groups/dickson/home/bathd/Desktop/proboscis_movie/_tmp%05d.png'%(framenumber), imcopy)
-#-----------------------------
+"""
+
+
+height = 150
+width = 150
+_data = np.zeros((height, width), np.float32)
+template = np.load('/groups/dickson/home/bathd/wahnsinn/flymad_jaaba/template_files/head_template_gen2.npy')
 
 
 if __name__ == "__main__":
@@ -199,3 +219,13 @@ if __name__ == "__main__":
     DATADIR = args.flymad_dir 
     if (DATADIR[-1] != '/'):
         DATADIR = DATADIR + '/' 
+    for x in glob.glob(DATADIR + '*zoom*/*.fmf'):
+        if not os.path.exists(x.rsplit('/',1)[0] + '/proboscis_data.pickle'):
+            print "processing: ", x.split('/')[-1]
+            try:
+                _tracking = x.rsplit('/',1)[0] + '/tracking_info.pickle'
+                _ = track_proboscis(x, _tracking)
+            except:
+                print "unable to process: ", x.split('/')[-1]
+        
+    
