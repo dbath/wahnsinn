@@ -66,12 +66,13 @@ def parse_calibration_time(namestring):
     
 def match_fmf_and_bag(fmf_filepath, bagdir):
     FLY_ID, fmftime, exp_id = parse_fmftime(fmf_filepath)
+    matching_bag = None
     for bag in glob.glob(bagdir + '/*.bag'):
         if abs(parse_bagtime(bag) - fmftime) < np.timedelta64(30000000000, 'ns'):
             matching_bag = bag
             return matching_bag
     if matching_bag == None:
-        print "no matching bag file found: ", fmf_filepath
+        print "no matching bag file found: ", fmf_filepath, fmftime
         return None
 
 def match_wide_to_zoom(fmf_filepath, widedir):

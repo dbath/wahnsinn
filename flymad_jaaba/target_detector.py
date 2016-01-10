@@ -96,7 +96,7 @@ class TargetDetector(object):
     
         #BINARIZE AND DETECT CONTOURS FOR TARGETS
         ret, thresh = cv2.threshold(imgray, 128, 255, 0)
-        kernel = np.ones((5,5),np.uint8)
+        kernel = np.ones((3,3),np.uint8)
         eroded = cv2.erode(thresh, kernel, iterations=1)
     
         contours_targets, hierarchy = cv2.findContours(eroded, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)    
@@ -104,10 +104,10 @@ class TargetDetector(object):
         for c in contours_targets:
             area = cv2.contourArea(c)
             #TARGETS MUST BE APPROPRIATE SIZE
-            if (area >= 80) and (area <=400):
+            if (area >= 10) and (area <=400):
                 (x,y), radius = cv2.minEnclosingCircle(c)
-                #CHECK IF TARGET IN CENTRE 80% OF ARENA
-                if ( ((x - cx)**2 + (y - cy)**2) <= (cr*0.5)**2): 
+                #CHECK IF TARGET IN CENTRE 40% OF ARENA
+                if ( ((x - cx)**2 + (y - cy)**2) <= (cr*0.4)**2): 
                     self._targets.append([x,y, radius])
         return self._targets
 
@@ -220,7 +220,7 @@ class TargetDetector(object):
         distances = DataFrame()
         for target in range(len(self._targets)):
             px, py, pr = self._targets[target]
-            distances['d'+ str(target)] = (((positions['fly_x'] - px)**2 + (positions['fly_y'] - py)**2)**0.5)# - pr
+            distances['d'+ str(target)] = ((((positions['fly_x'] - px)/5.2)**2 + ((positions['fly_y'] - py)/4.8)**2)**0.5)# - pr
         
         distances['Timestamp'] = positions.Timestamp
         distances = utilities.convert_timestamps(distances)

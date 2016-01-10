@@ -72,13 +72,14 @@ def pick_matching_dirs(directory, pattern1, pattern2):   #example: '/groups/dick
     
 def copy_with_dirs(fullpath):
     newpath = POOL_DIR + '/'.join(fullpath.split('/')[-2:])
-    if not os.path.exists(newpath) ==True:
-        os.makedirs('/'.join(newpath.rsplit('/',2)[0]) + '/')
+    if not os.path.exists(newpath.rsplit('/',1)[0]) ==True:
+        print 'making dir: ', newpath.rsplit('/',1)[0]
+        os.makedirs(newpath.rsplit('/',1)[0])#'/'.join(newpath.rsplit('/',2)[0]) + '/')
     shutil.copy(fullpath, newpath)
     
 
 def copy_bag_file(fullpath):
-    FLY_ID, FMF_TIME, GROUP = parse_fmftime(fullpath.split('/registered_trx.csv')[0])
+    FLY_ID, FMF_TIME, GROUP = parse_fmftime(fullpath.rsplit('/',1)[0])
     BAG_FILE = match_fmf_and_bag(FMF_TIME)
     shutil.copy(BAG_FILE, (POOL_DIR + 'BAGS/'))
 
@@ -90,15 +91,11 @@ bagframe = DataFrame(baglist, columns=['Filepath', 'Timestamp'])
 bagframe.index = pd.to_datetime(bagframe['Timestamp'])
 bagframe = bagframe.sort()
 
-print SEARCH_DIR + SEARCH_TERM
     
 for matching_dir in glob.glob(SEARCH_DIR + SEARCH_TERM):
     filelist.append(matching_dir)
-    print matching_dir
     for fn in find_files(matching_dir, 'frame_by_frame_synced.pickle'):
-        print fn
         copy_with_dirs(fn)
-        print fn.rsplit('/',1)[0] + '/tracking_info.pickle'
         copy_with_dirs(fn.rsplit('/',1)[0] + '/tracking_info.pickle')
         copy_with_dirs(fn.rsplit('/',1)[0] + '/wingdata.pickle')
         copy_bag_file(fn)

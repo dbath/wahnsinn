@@ -279,13 +279,15 @@ def sync_jaaba_with_ros(FMF_DIR):
     
     if os.path.exists(FMF_DIR + '/wingdata.pickle'):
         datadf = pd.read_pickle(FMF_DIR + '/wingdata.pickle')
-        datadf.columns= ['BodyAxis','leftAngle','leftWingLength','Length','rightAngle','rightWingLength','Timestamp','Width']
+        datadf.columns= ['BodyAxis','leftAngle','leftWingLength','Length','rightAngle','rightWingLength','target_angle_TTM',
+                                     'target_distance_TTM','Timestamp','Width']
     else:
         try:
             wings = wing_detector.WingDetector(ZOOM_FMF, BAG_FILE, dtarget, arena_centre, TRACKING_DIRECTORY )
             
             wings.execute()
-            wings.wingData.columns= ['BodyAxis','leftAngle','leftWingLength','Length','rightAngle','rightWingLength','Timestamp','Width']
+            wings.wingData.columns= ['BodyAxis','leftAngle','leftWingLength','Length','rightAngle','rightWingLength','target_angle_TTM',
+                                     'target_distance_TTM','Timestamp','Width']
             wings.wingData.to_pickle(FMF_DIR + '/wingdata.pickle')
             wings.tracking_info.to_pickle(FMF_DIR + '/tracking_info.pickle')
             datadf = DataFrame(wings.wingData)
@@ -322,11 +324,12 @@ def sync_jaaba_with_ros(FMF_DIR):
     
     positions = utilities.get_positions_from_bag(BAG_FILE)
     positions = utilities.convert_timestamps(positions)
-    datadf['fly_x'] = positions['fly_x'].asof(datadf.index).fillna(value=0)
-    datadf['fly_y'] = positions['fly_y'].asof(datadf.index).fillna(value=0)
+    datadf['fly_x'] = positions['fly_x'].asof(datadf.index).fillna(method='pad')
+    datadf['fly_y'] = positions['fly_y'].asof(datadf.index).fillna(method='pad')
     
-    datadf['dcentre'] = np.sqrt((datadf['fly_x']-arena_centre[0])**2 + (datadf['fly_y']-arena_centre[1])**2)
-    datadf['dtarget'] = targets.get_dist_to_nearest_target(BAG_FILE)['dtarget'].asof(datadf.index).fillna(value=0)
+    datadf['dcentre'] = np.sqrt(((datadf['fly_x']-arena_centre[0])/5.2)**2 + ((datadf['fly_y']-arena_centre[1])/5.2)**2)
+    dtarget_temp = targets.get_dist_to_nearest_target(BAG_FILE)['dtarget'].asof(datadf.index).fillna(method='pad')
+    datadf['dtarget'] = datadf['target_distance_TTM'].fillna(dtarget_temp)
     
     
     datadf['Timestamp'] = datadf.index #silly pandas bug for subtracting from datetimeindex...
@@ -342,8 +345,8 @@ def sync_jaaba_with_ros(FMF_DIR):
     datadf.index = pd.to_datetime(datadf.index)
 
     ###    WING EXTENSION    ###
-    datadf['maxWingAngle'] = get_absmax(datadf[['leftAngle','rightAngle']])
-    datadf['maxWingLength'] = get_absmax(datadf[['leftWingLength','rightWingLength']])
+    datadf['maxWingAngle'] = get_absmax(datadf[['leftAngle','rightAngle']]).fillna(method='pad')
+    datadf['maxWingLength'] = get_absmax(datadf[['leftWingLength','rightWingLength']]).fillna(method='pad')
     #datadf[datadf['maxWingAngle'] > 3.1] = np.nan
 
     number_of_bouts, stim_duration, first_TS, last_TS = utilities.detect_stim_bouts(datadf, 'Laser2_state')  #HACK DANNO
