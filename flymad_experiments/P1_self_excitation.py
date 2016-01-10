@@ -36,6 +36,7 @@ class Experiment:
         self._laser = rospy.ServiceProxy('/experiment/laser', flymad.srv.LaserState)
         self._laser(LASER0_ON)
         self.stimcount = 0
+        self._total_stim = 0
 
         self._OK_to_initialize = 0
         self._tracking_accuracy = rospy.Subscriber('/flymad/tracked', 
@@ -54,14 +55,14 @@ class Experiment:
         if np.sqrt((self.center[0]-msg.fly_x)**2 + (self.center[1]-msg.fly_y)**2) < self.radius:
             rospy.loginfo('targeting fly %s' % msg.obj_id + '\t' +  str(self.stimcount))
             self._laser(LASER0_ON | LASER2_ON)
-            
-            """if self.stimcount >= 300:
+            self._total_stim += 1
+            if self.stimcount >= 1000:
                 self._laser(LASER0_ON)
                 rospy.sleep(10)
                 self.stimcount = 0
             else:
                 self.stimcount += 1
-            """        
+                    
         else:
             
             self._laser(LASER0_ON)
@@ -82,7 +83,7 @@ class Experiment:
         T_RED_ON         = 0.5
         T_RED_OFF        = 1.5
         T_RED           = 0
-        T_WAIT2         = 1
+        T_WAIT2         = 300
 
         RED_LASER = LASER2_ON
         IR_LASER  = LASER1_ON
@@ -120,12 +121,27 @@ class Experiment:
                 rospy.loginfo('Off')
                 self._laser(LASER0_ON)
                 repeat += 1
-                rospy.sleep(T_WAIT2)
+                rospy.sleep(5)
                 _ = rospy.Subscriber('/targeter/targeted',
                         flymad.msg.TargetedObj,
                         self.on_targeted)
                 rospy.loginfo('running')
-                rospy.spin()
+                while self._total_stim <= 6000:
+                    rospy.spin()
+                
+                rospy.sleep(T_WAIT2)
+                
+                print '\a', 'EXPERIMENT FINISHED'
+                rospy.sleep(0.5)
+                print '\a', '\a', '\a'
+                rospy.sleep(0.2)
+                print '\a'
+                rospy.sleep(0.2)
+                print '\a'
+                rospy.sleep(0.5)
+                print '\a'                
+
+
                 self._laser(LASER0_ON)
 
 
@@ -145,9 +161,9 @@ if __name__ == "__main__":
     parser.add_argument('--recoverlength', type=float, required=False, default=5,
                             help='duration of recovery in seconds') 
     parser.add_argument('--center', nargs=2, metavar=('center_x','center_y'),
-                        default=(302, 233), help='the (X,Y) location of the arena center')
+                        default=(280, 227), help='the (X,Y) location of the arena center')
     parser.add_argument('--radius', type=float,
-                        default=22.0, help='the radius of the activation zone')
+                        default=33.0, help='the radius of the activation zone')
     args = parser.parse_args()
     
     
