@@ -161,6 +161,7 @@ def view_pairwise_stats( data, names, fig_prefix, **kwargs):
         for j, name2 in enumerate(names):
             if j<=i:
                 continue
+            #if (focus in name1.split('-')) or (focus in name2.split('-')):
             pairs.append( (name1, name2 ) )
 
     graph_data = []
@@ -254,7 +255,9 @@ def sync_jaaba_with_ros(FMF_DIR):
     BAG_FILE                = match_fmf_and_bag(FMF_TIME)
     
     WIDE_FMF                = utilities.match_wide_to_zoom(FMF_DIR, DATADIR)
-    
+
+    FLY_IDx = FMF_DIR.split('/')[-1]
+    EXP_ID, DATE, TIME = FLY_IDx.split('_', 4)[0:3]    
     
     
     for x in glob.glob(FMF_DIR +'/*zoom*'+'*.fmf'):
@@ -277,10 +280,10 @@ def sync_jaaba_with_ros(FMF_DIR):
     else:
         TRACKING_DIRECTORY = None
     
-    if os.path.exists(FMF_DIR + '/wingdata.pickle'):
+    if (os.path.exists(FMF_DIR + '/wingdata.pickle')) and not RETRACK:
         datadf = pd.read_pickle(FMF_DIR + '/wingdata.pickle')
         datadf.columns= ['BodyAxis','leftAngle','leftWingLength','Length','rightAngle','rightWingLength','target_angle_TTM',
-                                     'target_distance_TTM','Timestamp','Width']
+                                 'target_distance_TTM','Timestamp','Width']
     else:
         try:
             wings = wing_detector.WingDetector(ZOOM_FMF, BAG_FILE, dtarget, arena_centre, TRACKING_DIRECTORY )
@@ -327,17 +330,24 @@ def sync_jaaba_with_ros(FMF_DIR):
     datadf['fly_x'] = positions['fly_x'].asof(datadf.index).fillna(method='pad')
     datadf['fly_y'] = positions['fly_y'].asof(datadf.index).fillna(method='pad')
     
-    datadf['dcentre'] = np.sqrt(((datadf['fly_x']-arena_centre[0])/5.2)**2 + ((datadf['fly_y']-arena_centre[1])/5.2)**2)
-    dtarget_temp = targets.get_dist_to_nearest_target(BAG_FILE)['dtarget'].asof(datadf.index).fillna(method='pad')
-    datadf['dtarget'] = datadf['target_distance_TTM'].fillna(dtarget_temp)
+    datadf['dcentre'] = np.sqrt(((datadf['fly_x']-arena_centre[0])/4.8)**2 + ((datadf['fly_y']-arena_centre[1])/5.2)**2)
+    datadf['dtarget_temp'] = targets.get_dist_to_nearest_target(BAG_FILE)['dtarget'].asof(datadf.index).fillna(method='pad')
+    datadf.loc[datadf['dtarget_temp'] >=6.0, 'target_distance_TTM'] = np.nan 
+    datadf['dtarget'] = datadf['target_distance_TTM'].fillna(datadf['dtarget_temp'])
     
     
     datadf['Timestamp'] = datadf.index #silly pandas bug for subtracting from datetimeindex...
     
-    number_of_bouts, bout_duration, first_TS, last_TS = utilities.detect_stim_bouts(datadf, 'Laser1_state')
-    
+    #number_of_bouts, bout_duration, first_TS, last_TS = utilities.detect_stim_bouts(datadf, 'Laser1_state')
+
+    number_of_bouts, stim_duration, first_TS, last_TS = utilities.detect_stim_bouts(datadf, 'Laser2_state')  #HACK DANNO
+    datadf['stim_duration'] = stim_duration
+        
     try:
-        datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp[(datadf.Laser2_state + datadf.Laser1_state) > 0.001].index[0]
+        if stim_duration > 0:
+            datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp[(datadf.Laser2_state + datadf.Laser1_state) > 0.001].index[0]
+        elif stim_duration == 0:
+            datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp.index[0] - pd.to_datetime('60s')
     except:
         print "WARNING:   Cannot synchronize by stimulus. Setting T0 to frame0. "
         datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp.index[0]
@@ -349,8 +359,6 @@ def sync_jaaba_with_ros(FMF_DIR):
     datadf['maxWingLength'] = get_absmax(datadf[['leftWingLength','rightWingLength']]).fillna(method='pad')
     #datadf[datadf['maxWingAngle'] > 3.1] = np.nan
 
-    number_of_bouts, stim_duration, first_TS, last_TS = utilities.detect_stim_bouts(datadf, 'Laser2_state')  #HACK DANNO
-    datadf['stim_duration'] = stim_duration
 
 
 
@@ -418,22 +426,30 @@ def sync_jaaba_with_ros(FMF_DIR):
     trace.savefig(DATADIR + 'TRACES/' + FLY_ID + '.png')
     plt.close('all')
     
-    ###FIRST COURTSHIP BOUT AFTER STIMULUS###
-    
+    ########## GROUPING INFORMATION ######
+    if DOSE_RESPONSE:
+        stim_duration_group = find_nearest(STIM_GROUPS, stim_duration)
+        exp_group = str(number_of_bouts) + 'x_' + str(stim_duration_group) + 'ms'
+        datadf['group'] = exp_group
+        print EXP_ID, exp_group
+    else:
+        exp_group = EXP_ID    
     #courted, latency = latency_measures(datadf)
+    datadf['group'] = exp_group
     
     datadf.to_pickle(FMF_DIR + '/frame_by_frame_synced.pickle')
     datadf.to_csv(FMF_DIR + '/frame_by_frame_synced.csv', sep=',')
     
     if 'binsize' in globals():
         datadf = bin_data(datadf, binsize)
+        datadf['group'] = exp_group
         datadf.to_pickle(DATADIR + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle')
     else:
         return datadf, courted, latency
     
 def latency_measures(datadf): #takes input from unbinned datadf (during sync...)
       poststim = datadf[(datadf.index > datadf[(datadf.Laser2_state + datadf.Laser1_state) > 0.001].index[-1])]
-      courting = poststim[(poststim.maxWingAngle >= 0.523598776)  & (poststim.dtarget <= 50 )]
+      courting = poststim[(poststim.maxWingAngle >= 0.523598776)  & (poststim.dtarget <= 2 )]
       try: 
         latency = (courting.index[0] - poststim.index[0]).total_seconds()
         courted = 1
@@ -454,7 +470,6 @@ def find_nearest(array,value):
     
 def gather_data(filelist):
     datadf = DataFrame()
-    intvals = np.array([0, 200, 2000, 20000]) #6310
     for x in filelist:
         print x
         FLY_ID = x.split('/')[-1].split('_fly.')[0]
@@ -466,16 +481,7 @@ def gather_data(filelist):
         if WEI < WEI_THRESHOLD:
             print FLY_ID, " excluded from analysis, with wing extension index: " , WEI , "."
             continue
-        if DOSE_RESPONSE:
-            try:
-                number_of_bouts, bout_duration, first_TS, last_TS = utilities.detect_stim_bouts(fx, 'Laser2_state')
-            except:
-                number_of_bouts = 1
-            
-            stim_duration = find_nearest(intvals, fx['stim_duration'][0])
-            fx['group'] = str(number_of_bouts) + 'x_' + str(stim_duration) + 'ms'
-        else:
-            fx['group'] = EXP_ID
+
         fx['FlyID'] = FLY_ID
         datadf = pd.concat([datadf, fx])
     datadf.to_csv(DATADIR + HANDLE + '_rawdata_' + binsize + '.csv', sep=',')
@@ -495,7 +501,7 @@ def group_data(raw_pickle):
     grouped = df.groupby(['group', df.index])
     means = grouped.mean()
     ns = grouped.count()
-    sems = grouped.aggregate(lambda x: st.sem(x, axis=None))
+    sems = grouped.sem() #.aggregate(lambda x: st.sem(x, axis=None))
     means.to_csv(DATADIR + HANDLE + '_mean_' + binsize + '.csv')
     means.to_pickle(DATADIR + 'JAR/'+HANDLE+ '_mean_' + binsize + '.pickle')
     ns.to_csv(DATADIR + HANDLE + '_n_' + binsize + '.csv') 
@@ -551,7 +557,7 @@ def plot_data(means, sems, ns, measurement):
         nsems = []
         for w in means.ix[x].index:
             laser_x.append((w-pd.to_datetime(0)).total_seconds())
-            if ns.ix[x]['FlyID'][w] >= ((max_n)/3): #(max_n/3):
+            if ns.ix[x]['FlyID'][w] >= ((max_n)-6): #(max_n/3):
                 x_range.append((w-pd.to_datetime(0)).total_seconds())
                 #print ns.ix[x]['FlyID'][w]
                 x_values.append((w-pd.to_datetime(0)).total_seconds())
@@ -582,13 +588,16 @@ def plot_data(means, sems, ns, measurement):
     if 'maxWingAngle' in measurement:
         ax.set_ylabel('Mean maximum wing angle (rad)' + ' ' + u"\u00B1" + ' SEM', fontsize=16)   # +/- sign is u"\u00B1"
     elif 'dtarget' in measurement:
-        ax.set_ylabel('Mean min. distance to target (px)' + ' ' + u"\u00B1" + ' SEM', fontsize=16)   # +/- sign is u"\u00B1"
+        ax.set_ylabel('Mean min. distance to target (mm)' + ' ' + u"\u00B1" + ' SEM', fontsize=16)   # +/- sign is u"\u00B1"
         
     else:
         ax.set_ylabel('Mean ' + measurement  + ' ' + u"\u00B1" + ' SEM', fontsize=16)
         
     ax.set_xlabel('Time (s)', fontsize=16)      
-    
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.yaxis.set_ticks_position('left')
+    ax.xaxis.set_ticks_position('bottom')
     #laser_x =  means.index.levels[1][(means.index.levels[1] > pd.to_datetime(np.amin(x_range)*1e9)) & (means.index.levels[1] < pd.to_datetime(np.amax(x_range)*1e9))]
      
     if args.plot_ambient == True:
@@ -648,12 +657,17 @@ if __name__ == "__main__":
                             help="Make True if you want to analyze data from copies of pickled data")
     parser.add_argument('--plot_ambient', type=str, required=False, default = False, 
                             help="Make True if you want to plot the absence of ambient light from laser0.")
+    parser.add_argument('--retrack', type=str, required=False, default = False, 
+                            help="Make True if you want track all parameters again from fmf and bag.")
     parser.add_argument('--make_tracking_movie', type=str, required=False, default = False, 
                             help="Make True if you want to save annotated frames for tracking movies.")
     parser.add_argument('--dose_response', type=str, required=False, default = False, 
                             help="Make True if you want to group by stimulus paradigm.")
+    parser.add_argument('--stim_groups', type=str, required=False, default = "0,200,2000,6310,20000", 
+                            help="pass a list of stimulus groups in a dose response.")
     
-        
+    
+       
     args = parser.parse_args()
 
     DATADIR = args.rawdatadir
@@ -669,11 +683,16 @@ if __name__ == "__main__":
     #OUTPUT = args.outputdir
     COMPILE_FOLDERS = args.compile_folders
     DOSE_RESPONSE = args.dose_response
+    RETRACK = args.retrack
+
+    STIM_GROUPS = np.array([int(item) for item in args.stim_groups.split(',')])
+
 
     binsize = (args.binsize)
     print "BINSIZE: ", binsize
-    colourlist = ['#333333','#0033CC', '#AAAAAA','#6699FF', '#202020','#0032FF','r','c','m','y', '#000000']
-
+    colourlist = ['#202020','#202090','#AAAAAA','#009020', '#6699FF', '#333333','#0032FF','r','c','m','y', '#000000']
+    #colourlist = ['#2020CC','#20CC20','#FFCC20','#CC2000','#202020']
+    #colourlist = ['#CC2000','#2020CC','#20CC20','#FFCC20','#CC2000','#202020']
     #filename = '/tier2/dickson/bathd/FlyMAD/DATADIR_tracking/140927/wing_angles_nano.csv'
     #binsize = '5s'  # ex: '1s' or '4Min' etc
     #BAG_FILE = '/groups/dickson/home/bathd/Dropbox/140927_flymad_rosbag_copy/rosbagOut_2014-09-27-14-53-54.bag'
@@ -702,7 +721,7 @@ if __name__ == "__main__":
         _filelist.append(_directory)
     for directory in np.arange(len(_filelist)):    
         FLY_ID, FMF_TIME, GROUP = parse_fmftime(_filelist[directory])
-        if not os.path.exists(DATADIR + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle') ==True:
+        if not (os.path.exists(DATADIR + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle') ==True):
             p = Process(target=sync_jaaba_with_ros, args=(_filelist[directory],))
             p.start()
             threadcount +=1

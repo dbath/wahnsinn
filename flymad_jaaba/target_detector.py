@@ -168,7 +168,7 @@ class TargetDetector(object):
         
         WING_DF = WING_DF[TS_START:TS_END]
         WING_DF = WING_DF.sort('maxWingAngle')
-        print FN, TS_END-TS_START
+        #print FN, TS_END-TS_START
  
         im = cv2.imread(self._tempdir + 'background.png')
        
