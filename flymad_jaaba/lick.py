@@ -9,6 +9,8 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import argparse
+from multiprocessing import Process
+import traceback
 
 
 
@@ -50,13 +52,35 @@ def get_proboscis(frame, slyce):
     rat = data[75:95, 65:85].mean() / data[35:55, 65:85].mean()
     return rat    
 
+def get_mask(framenumber):
+    headImage = get_head_image(fmf.get_frame(framenumber)[0], tracking.ix[framenumber])
+    print detect_proboscis(headImage)
+    q = headImage / template
+    im = cv2.cvtColor(q.astype(np.uint8), cv2.COLOR_GRAY2BGR) #must be uint8 array
+    imgray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
+    kernel = np.ones((5,5),np.uint8)
+    ret2, mask = cv2.threshold(imgray, 65, 255, cv2.THRESH_BINARY)
+    dil= cv2.dilate(mask, kernel, iterations=1)
+    eroded= cv2.erode(dil, kernel, iterations=1)
+    fig = plt.figure()
+    ax = fig.add_subplot(224)
+    ax.imshow(eroded)
+    ax1 = fig.add_subplot(221)
+    ax1.imshow(headImage)
+    ax4 = fig.add_subplot(222)
+    ax4.imshow(dil)
+    ax3 = fig.add_subplot(223)
+    ax3.imshow(q)
+    plt.show()
+    return 
+
 
 def detect_proboscis(headImage):
     q = headImage / template
     im = cv2.cvtColor(q.astype(np.uint8), cv2.COLOR_GRAY2BGR) #must be uint8 array
     imgray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
     kernel = np.ones((5,5),np.uint8)
-    ret2, mask = cv2.threshold(imgray, 85, 255, cv2.THRESH_BINARY)
+    ret2, mask = cv2.threshold(imgray, 65, 255, cv2.THRESH_BINARY)
     dil= cv2.dilate(mask, kernel, iterations=1)
     eroded= cv2.erode(dil, kernel, iterations=1)
     contourImage = eroded.copy()
@@ -169,7 +193,7 @@ def track_proboscis(fmf_file, tracking_file):
         try:
             head = get_head_image(fmf.get_frame(framenumber)[0], tracking.ix[framenumber])
         except:
-            head = get_head_image(fmf.get_frame(framenumber)[0], tracking.ix[0])
+            head = get_head_image(fmf.get_frame(framenumber)[0], tracking[0:1])
         pro = detect_proboscis(head)
         s.loc[framenumber] = pro
         
@@ -218,14 +242,37 @@ if __name__ == "__main__":
 
     DATADIR = args.flymad_dir 
     if (DATADIR[-1] != '/'):
-        DATADIR = DATADIR + '/' 
+        DATADIR = DATADIR + '/'
+
+    """
     for x in glob.glob(DATADIR + '*zoom*/*.fmf'):
         if not os.path.exists(x.rsplit('/',1)[0] + '/proboscis_data.pickle'):
             print "processing: ", x.split('/')[-1]
-            try:
-                _tracking = x.rsplit('/',1)[0] + '/tracking_info.pickle'
-                _ = track_proboscis(x, _tracking)
-            except:
-                print "unable to process: ", x.split('/')[-1]
+            #try:
+            _tracking = x.rsplit('/',1)[0] + '/tracking_info.pickle'
+            _ = track_proboscis(x, _tracking)
+            #except:
+            #    print "unable to process: ", x.split('/')[-1]
+     """ 
+ 
+    threadcount = 0
+    _filelist = []
+    for _directory in glob.glob(DATADIR + '*zoom*/*.fmf'):
+        _filelist.append(_directory)
+    for x in np.arange(len(_filelist)):    
         
+        if not os.path.exists(_filelist[x].rsplit('/',1)[0] + '/proboscis_data.pickle'):
+            print "processing: ", _filelist[x].split('/')[-1]
+            _tracking = _filelist[x].rsplit('/',1)[0] + '/tracking_info.pickle'
+            p = Process(target=track_proboscis, args=(_filelist[x], _tracking))
+            p.start()
+            threadcount +=1
+            
+            if p.is_alive():
+                if threadcount >=8:
+                    threadcount = 0
+                    p.join()
+                elif _filelist[x] == _filelist[-1]:
+                    threadcount=0
+                    p.join()       
     
