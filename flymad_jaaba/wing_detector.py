@@ -297,7 +297,10 @@ class WingDetector(object):
             
             imcopy = im.copy()
             cv2.putText(imcopy, "ERROR", (480,530), self.font, 1, (255,255,255), 3)
-            self.wingData.loc[framenumber] = self.wingData.loc[framenumber-1]#[np.nan, np.nan, np.nan,  np.nan, np.nan. np.nan]
+            try:
+                self.wingData.loc[framenumber] = self.wingData.loc[framenumber-1]#[np.nan, np.nan, np.nan,  np.nan, np.nan. np.nan]
+            except:
+                self.wingData.loc[framenumber] = [np.nan, np.nan, np.nan,  np.nan,   np.nan, np.nan, np.nan, np.nan, timestamp, np.nan]
 
             if self.saveImage == True:
                 cv2.imwrite(self._tempdir+'_tmp%05d.png'%(framenumber), imcopy)  
@@ -374,7 +377,7 @@ class WingDetector(object):
 
         ########################### TARGET TOUCH #############################################
         
-        if (bodyContour != None) & (targ_dist <= 40.0):
+        if (bodyContour != None) & (targ_dist <= 5.0):
             imcopy = imgray.copy()
             bodymask = imcopy / imcopy - 1.0  #zeros, with dimensions of image.
             cv2.fillPoly(bodymask, [bodyContour],(255-imcopy.max()))
@@ -418,8 +421,8 @@ class WingDetector(object):
         wingSets['polydif'] = (wingSets['Theta'] - polynomial(wingSets['Area'])) 
                         
         wingSets = wingSets[(wingSets['Length'] >=235) & (wingSets['Length'] < 350)]
-        wingSets = wingSets[(wingSets['Theta'] <= (np.pi)/2.0 )]
-        wingSets = wingSets[(wingSets['polydif'] >= -0.4) & (wingSets['polydif'] <= 0.6)]
+        wingSets = wingSets[(wingSets['Theta'] <= (np.pi)/1.75 )]
+        wingSets = wingSets[(wingSets['polydif'] >= -0.6) & (wingSets['polydif'] <= 0.2)]
         wingSets = wingSets[(wingSets['Area'] >= 2000) & (wingSets['Area'] <= 35000)]
 
         
