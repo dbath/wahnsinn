@@ -286,7 +286,7 @@ def sync_jaaba_with_ros(FMF_DIR):
                                  'target_distance_TTM','Timestamp','Width']
     else:
         try:
-            wings = wing_detector.WingDetector(ZOOM_FMF, BAG_FILE, dtarget, arena_centre, TRACKING_DIRECTORY )
+            wings = wing_detector.WingDetector(ZOOM_FMF, BAG_FILE, dtarget, arena_centre, RETRACK, TRACKING_DIRECTORY )
             
             wings.execute()
             wings.wingData.columns= ['BodyAxis','leftAngle','leftWingLength','Length','rightAngle','rightWingLength','target_angle_TTM',
@@ -690,7 +690,7 @@ if __name__ == "__main__":
 
     binsize = (args.binsize)
     print "BINSIZE: ", binsize
-    colourlist = ['#202020','#202090','#AAAAAA','#009020', '#6699FF', '#333333','#0032FF','r','c','m','y', '#000000']
+    colourlist = ['#202090','#202020','#AAAAAA','#009020', '#6699FF', '#333333','#0032FF','r','c','m','y', '#000000']
     #colourlist = ['#2020CC','#20CC20','#FFCC20','#CC2000','#202020']
     #colourlist = ['#CC2000','#2020CC','#20CC20','#FFCC20','#CC2000','#202020']
     #filename = '/tier2/dickson/bathd/FlyMAD/DATADIR_tracking/140927/wing_angles_nano.csv'

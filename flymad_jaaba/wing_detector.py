@@ -16,7 +16,7 @@ import shutil
 
 class WingDetector(object):
 
-    def __init__(self, zoomFMF_filepath, bag_filepath, dTarget, arena_centre, tempdir=None ):
+    def __init__(self, zoomFMF_filepath, bag_filepath, dTarget, arena_centre, RETRACK, tempdir=None ):
         
         
         self.fmf_file = zoomFMF_filepath
@@ -48,7 +48,7 @@ class WingDetector(object):
         self.DEBUGGING_DIR = self.DEBUGGING_DIR + '/'
         self.error_count = 0
         self.ERROR_REPORTING = False
-        
+        self.retrack = RETRACK
         self.font = cv2.FONT_HERSHEY_SIMPLEX
         
         self.previous_head_extended = None
@@ -69,7 +69,7 @@ class WingDetector(object):
         else:
             pass
         
-        if os.path.exists(self.DEBUGGING_DIR + 'wingdata_cache.pickle'):
+        if (os.path.exists(self.DEBUGGING_DIR + 'wingdata_cache.pickle')) and not (self.retrack):
             self.wingData = pd.read_pickle(self.DEBUGGING_DIR + 'wingdata_cache.pickle')
             self.wingData.columns= ['BodyAxis','leftAngle','leftWingLength','Length','rightAngle','rightWingLength','target_angle_TTM',
                                      'target_distance_TTM','Timestamp','Width']
@@ -398,10 +398,10 @@ class WingDetector(object):
         wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length, axisLine, wingTips, wholeWings, wingArea, timestamp_FMT, distance, targ_dist, ((0,0,0),(0,0,0),(0,0,0)))
         wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((-10,0,0),(-10,0,0),(0,0,0)))
         wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((10,0,0),(10,0,0),(0,0,0)))
-        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((10,1,1),(10,0,1),(0,0,0)))
-        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((-10,1,1),(-10,0,1),(0,0,0)))
+        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((10,1,1),(10,0,-1),(0,0,0)))
+        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((-10,1,1),(-10,0,-1),(0,0,0)))
 
-        polynomial = np.poly1d([  1.47283629e-09,   7.10509872e-06,  -1.29235190e-02])
+        polynomial = np.poly1d([  1.56185016e-09,  -9.15206740e-06,   3.52322679e-02])
 
         wingSets = pd.DataFrame({'Tips':wingTips, 'Shape':wholeWings, 'Area':wingArea, 'Theta':np.empty(len(wingTips)).fill(0)})
         wingSets['Theta'] = np.nan
@@ -420,15 +420,15 @@ class WingDetector(object):
         wingSets.loc[wingSets['Side'] == 'Right','Theta'] *= -1.0
         wingSets['polydif'] = (wingSets['Theta'] - polynomial(wingSets['Area'])) 
                         
-        wingSets = wingSets[(wingSets['Length'] >=235) & (wingSets['Length'] < 350)]
-        wingSets = wingSets[(wingSets['Theta'] <= (np.pi)/1.75 )]
-        wingSets = wingSets[(wingSets['polydif'] >= -0.6) & (wingSets['polydif'] <= 0.2)]
+        wingSets = wingSets[(wingSets['Length'] >=250) & (wingSets['Length'] < 350)]
+        wingSets = wingSets[(wingSets['Theta'] <= ((np.pi)/1.75) )]
+        wingSets = wingSets[(wingSets['polydif'] >= -0.3) & (wingSets['polydif'] <= 0.15)]
         wingSets = wingSets[(wingSets['Area'] >= 2000) & (wingSets['Area'] <= 35000)]
 
         
         try:
             #leftWing = wingSets.ix[wingSets[wingSets['Side']=='Left']['polydif'].abs().idxmin()]
-            leftWing = wingSets.ix[wingSets[wingSets['Side']=='Left']['Area'].abs().idxmax()]
+            leftWing = wingSets.ix[wingSets[wingSets['Side']=='Left']['Theta'].abs().idxmax()]
         except:
             leftWing = wingSets[0:0]
             leftWing.ix[0] = np.nan
@@ -438,7 +438,7 @@ class WingDetector(object):
             self.total_errors += 1
         try:
             #rightWing = wingSets.ix[wingSets[wingSets['Side']=='Right']['polydif'].abs().idxmin()]
-            rightWing = wingSets.ix[wingSets[wingSets['Side']=='Right']['Area'].abs().idxmax()]
+            rightWing = wingSets.ix[wingSets[wingSets['Side']=='Right']['Theta'].abs().idxmax()]
         except:
             rightWing = wingSets[0:0]
             rightWing.ix[0] = np.nan
@@ -597,7 +597,7 @@ class WingDetector(object):
                                 if (winglength <= 1.5*(body_length)) and (winglength >= abd_length):
                                     wingTips.append(far)
                                     wholeWings.append(cv2.convexHull(pointSet1))
-                                    wingArea.append(cv2.contourArea(cv2.convexHull(pointSet1)))
+                                    wingArea.append(cv2.contourArea(pointSet1))
                     if (len(pointSet2) > 0):
                         if cv2.contourArea(pointSet2) >=(2500/(wingThresh[2]+1)):
                             near, far = self.get_nearest_and_furthest_from_centroid(pointSet2, centroid)
@@ -606,7 +606,7 @@ class WingDetector(object):
                                 if (winglength <= 1.5*(body_length)) and (winglength >= abd_length):
                                     wingTips.append(far)
                                     wholeWings.append(cv2.convexHull(pointSet2))
-                                    wingArea.append(cv2.contourArea(cv2.convexHull(pointSet2)))
+                                    wingArea.append(cv2.contourArea(pointSet2))
         return wingTips, wholeWings, wingArea
     
 
