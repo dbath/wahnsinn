@@ -59,7 +59,11 @@ class WingDetector(object):
         self.wingData = DataFrame({'BodyAxis':[],  'leftAngle':[], 'leftWingLength':[], 'Length':[],  'rightAngle':[],'rightWingLength':[],'target_angle_TTM':[], 'target_distance_TTM':[], 'Timestamp':[],'Width':[]}, dtype=np.float64)            
 
         self.tracking_info = DataFrame({'a_wingAngle_left':[],'a_wingArea_left':[],'b_wingAngle_right':[], 'b_wingArea_right':[], 'c_head_location_x':[],'c_head_location_y':[], 'd_bodyAxis':[], 'e_centroid_x':[], 'e_centroid_y':[], 'f_dTarget_TTM':[], 'g_approachAngle_TTM':[]}, dtype=np.float64)
-    
+        
+        self.wingMetrics = DataFrame({'leftArea':[],'leftLength':[],'leftTheta':[],
+                                     'rightArea':[],'rightLength':[],'rightTheta':[]}, dtype=np.float64)
+                                     
+                                     
     def execute(self):
     
         total_frames = self.fmf.get_n_frames()
@@ -395,13 +399,9 @@ class WingDetector(object):
 
         wingTips, wholeWings, wingArea = [],[],[]
 
-        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length, axisLine, wingTips, wholeWings, wingArea, timestamp_FMT, distance, targ_dist, ((0,0,0),(0,0,0),(0,0,0)))
-        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((-10,0,0),(-10,0,0),(0,0,0)))
-        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((10,0,0),(10,0,0),(0,0,0)))
-        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((10,1,1),(10,0,-1),(0,0,0)))
-        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length,axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, ((-10,1,1),(-10,0,-1),(0,0,0)))
+        wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length, axisLine, wingTips, wholeWings, wingArea, timestamp_FMT, distance, targ_dist)
 
-        polynomial = np.poly1d([  1.56185016e-09,  -9.15206740e-06,   3.52322679e-02])
+        polynomial = np.poly1d([  3.43428403e-09,  -3.48084109e-05,   1.21336675e-01])
 
         wingSets = pd.DataFrame({'Tips':wingTips, 'Shape':wholeWings, 'Area':wingArea, 'Theta':np.empty(len(wingTips)).fill(0)})
         wingSets['Theta'] = np.nan
@@ -418,17 +418,17 @@ class WingDetector(object):
         wingSets.loc[wingSets['Theta'] < 0.0, 'Side'] = 'Right'
         wingSets.loc[wingSets['Theta'] >= 0.0, 'Side'] = 'Left'
         wingSets.loc[wingSets['Side'] == 'Right','Theta'] *= -1.0
-        wingSets['polydif'] = (wingSets['Theta'] - polynomial(wingSets['Area'])) 
+        #wingSets['polydif'] = (wingSets['Theta'] - polynomial(wingSets['Area'])) / (wingSets['Area']/20000.0)
                         
-        wingSets = wingSets[(wingSets['Length'] >=250) & (wingSets['Length'] < 350)]
+        wingSets = wingSets[(wingSets['Length'] >=250) & (wingSets['Length'] < 375)]
         wingSets = wingSets[(wingSets['Theta'] <= ((np.pi)/1.75) )]
-        wingSets = wingSets[(wingSets['polydif'] >= -0.3) & (wingSets['polydif'] <= 0.15)]
-        wingSets = wingSets[(wingSets['Area'] >= 2000) & (wingSets['Area'] <= 35000)]
+        #wingSets = wingSets[(wingSets['polydif'] >= -0.8) & (wingSets['polydif'] <= 1.0)]
+        wingSets = wingSets[(wingSets['Area'] >= 2000) & (wingSets['Area'] <= 30000)]
 
         
         try:
             #leftWing = wingSets.ix[wingSets[wingSets['Side']=='Left']['polydif'].abs().idxmin()]
-            leftWing = wingSets.ix[wingSets[wingSets['Side']=='Left']['Theta'].abs().idxmax()]
+            leftWing = wingSets.ix[wingSets[wingSets['Side']=='Left']['Area'].abs().idxmax()]
         except:
             leftWing = wingSets[0:0]
             leftWing.ix[0] = np.nan
@@ -438,7 +438,7 @@ class WingDetector(object):
             self.total_errors += 1
         try:
             #rightWing = wingSets.ix[wingSets[wingSets['Side']=='Right']['polydif'].abs().idxmin()]
-            rightWing = wingSets.ix[wingSets[wingSets['Side']=='Right']['Theta'].abs().idxmax()]
+            rightWing = wingSets.ix[wingSets[wingSets['Side']=='Right']['Area'].abs().idxmax()]
         except:
             rightWing = wingSets[0:0]
             rightWing.ix[0] = np.nan
@@ -469,6 +469,8 @@ class WingDetector(object):
             cv2.circle(imcopy, (int(backPoint[0]),int(backPoint[1])), 5, (255,255,255), -1)
             #cv2.circle(imcopy, (int(centroid[0]),int(centroid[1])), 3, (255,0,255), -1)
             cv2.putText(imcopy, str(np.around(np.degrees(leftWing.Theta), 2))+ 'deg', (10,25), self.font, 1, (20,20,255), 3)
+            cv2.putText(imcopy, str(np.around(rightWing.Area, 2)), (450, 65), self.font, 1, (20,255,20), 3)
+            cv2.putText(imcopy, str(np.around(leftWing.Area, 2)), (10,65), self.font, 1, (20,20,255), 3)
             cv2.putText(imcopy, str(np.around(np.degrees(rightWing.Theta), 2))+ 'deg', (450, 25), self.font, 1, (20,255,20), 3)
             cv2.putText(imcopy, str(framenumber), (850, 25), self.font, 1, (255,255,255), 3)
             cv2.putText(imcopy, str(np.around(target_distance_TTM, 2)) + 'mm', (10,950), self.font, 1, (100,255,255), 3)
@@ -486,10 +488,11 @@ class WingDetector(object):
         self.tracking_info.loc[framenumber] = [leftWing.Theta, leftWing.Area, rightWing.Theta, 
                                                rightWing.Area, head[0], head[1], body_angle, centroid[0], centroid[1], target_distance_TTM, approach_angle_TTM]
 
-
+        self.wingMetrics.loc[framenumber] = [leftWing.Area, leftWing.Length, leftWing.Theta, 
+                                             rightWing.Area, rightWing.Length, rightWing.Theta]
         if framenumber % 100 == 0:
             self.wingData.to_pickle(self.DEBUGGING_DIR + 'wingdata_cache.pickle')
-
+            self.wingMetrics.to_pickle(self.DEBUGGING_DIR + 'wingMetrics_cache.pickle')
         return body_angle, leftWing.Length, leftWing.Theta, body_length, rightWing.Length,  rightWing.Theta, timestamp, WIDTH
 
     def get_targets(self, fly_erased_img, headpoint, centroidpoint, _bodyAxis):
@@ -543,70 +546,93 @@ class WingDetector(object):
                 TARGET = None
         return TARGET, distance, approachAngle
     
-    def get_candidate_wings(self, imgray, kernel, headLine, centroid, backPoint, body_length, abd_length, axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist, parameter_adjustment):
+    def get_candidate_wings(self, imgray, kernel, headLine, centroid, backPoint, body_length, abd_length, axisLine, wingTips, wholeWings, wingArea,timestamp_FMT, distance, targ_dist):
         
-        self.adjust_tracking_parameters = parameter_adjustment
-
+        """
+        self.adjust_tracking_parameters = ((0,0,0),(0,0,0),(0,0,0))
         bodyThresh, wingThresh, ellThresh = self.get_tracking_thresholds(timestamp_FMT, distance, targ_dist)
         
-        #DEFINE bodyNotWings AS BODY PORTION PLUS LEGS ETC, USEFUL FOR FINDING WINGS.
-        ret1, bodyNotWings = cv2.threshold(imgray, bodyThresh[0],255,cv2.THRESH_BINARY)
-        bodyNotWings = cv2.dilate(bodyNotWings, kernel, iterations=bodyThresh[1])
-        bodyNotWings = cv2.erode(bodyNotWings, kernel, iterations=bodyThresh[2])
+        paramchanges =  [((0,0,0),(0,0,0),(0,0,0)),
+                         ((10,0,0),(10,0,0),(0,0,0)),
+                         ((-10,0,0),(-10,0,0),(0,0,0)),
+                         ((10,1,1),(10,0,-1),(0,0,0)),
+                         ((-10,1,1),(-10,0,-1),(0,0,0))]
+        
+        for p in paramchanges:
+                         
+            self.adjust_tracking_parameters = p
 
+            bodyThresh, wingThresh, ellThresh = self.get_tracking_thresholds(timestamp_FMT, distance, targ_dist)
+        """
         
-        #DEFINE wings AS WINGS AND TARGETS BUT NOT BODY.
-        ret2, wings = cv2.threshold(imgray, wingThresh[0],1,cv2.THRESH_BINARY_INV)
-        test = wings*bodyNotWings
-        dilated = cv2.erode(test, kernel, iterations=wingThresh[2])
-        eroded = cv2.dilate(dilated, kernel, iterations=wingThresh[1])
-        dilatedCopy = eroded.copy()
-        
-        wingCont, hierarchy = cv2.findContours(dilated, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
-        
-        
-        for c in wingCont:
-            area = cv2.contourArea(c)
-            #WINGS MUST BE APPROPRIATE SIZE
-            if (area >= 3000):
-                M = cv2.moments(c)
-                cx, cy = int(M['m10']/M['m00']), int(M['m01']/M['m00'])
-                #WINGS MUST BE BEHIND HEAD
-                if self.check_laterality(centroid, (cx,cy), headLine[0], headLine[1], headLine[2]):
-                    checkSpot = (c[0][0][0], c[0][0][1])
-                    pointSet1 = []
-                    pointSet2 = []
-                    pointSetTARGET = []
-                    for x in c:
-                        if self.check_laterality((x[0][0], x[0][1]), centroid, headLine[0], headLine[1], headLine[2]):
-                            if self.check_laterality((x[0][0], x[0][1]), checkSpot, axisLine[0], axisLine[1], axisLine[2]):
-                                pointSet1.append(x.tolist())
+        edge = self.get_edge(imgray)
+        if edge > 115:
+            wingThresh = int(0.75*edge + 12.0)
+            bodyThresh = int(0.45*edge + 2.5) 
+        else:
+            wingThresh = int(0.75*edge + 15.0)
+            bodyThresh = int(0.55*edge + 2.5)
+        adjustments = [-5,0,5]
+        for a in adjustments:   
+            #DEFINE bodyNotWings AS BODY PORTION PLUS LEGS ETC, USEFUL FOR FINDING WINGS.
+            ret1, bodyNotWings = cv2.threshold(imgray, bodyThresh,255,cv2.THRESH_BINARY)
+            bodyNotWings = cv2.dilate(bodyNotWings, kernel, iterations=1)
+            bodyNotWings = cv2.erode(bodyNotWings, kernel, iterations=1)
+
+            
+            #DEFINE wings AS WINGS AND TARGETS BUT NOT BODY.
+            ret2, wings = cv2.threshold(imgray, wingThresh+a,1,cv2.THRESH_BINARY_INV)
+            test = wings*bodyNotWings
+            dilated = cv2.erode(test, kernel, iterations=2)
+            #eroded = cv2.dilate(dilated, kernel, iterations=wingThresh[1])
+            #dilatedCopy = eroded.copy()
+            
+            wingCont, hierarchy = cv2.findContours(dilated, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+            
+            
+            
+            for c in wingCont:
+                area = cv2.contourArea(c)
+                #WINGS MUST BE APPROPRIATE SIZE
+                if (area >= 3000):
+                    M = cv2.moments(c)
+                    cx, cy = int(M['m10']/M['m00']), int(M['m01']/M['m00'])
+                    #WINGS MUST BE BEHIND HEAD
+                    if self.check_laterality(centroid, (cx,cy), headLine[0], headLine[1], headLine[2]):
+                        checkSpot = (c[0][0][0], c[0][0][1])
+                        pointSet1 = []
+                        pointSet2 = []
+                        pointSetTARGET = []
+                        for x in c:
+                            if self.check_laterality((x[0][0], x[0][1]), centroid, headLine[0], headLine[1], headLine[2]):
+                                if self.check_laterality((x[0][0], x[0][1]), checkSpot, axisLine[0], axisLine[1], axisLine[2]):
+                                    pointSet1.append(x.tolist())
+                                else:
+                                    pointSet2.append(x.tolist())
                             else:
-                                pointSet2.append(x.tolist())
-                        else:
-                            if targ_dist <=20.0:
-                                pointSetTARGET.append(x.tolist())
-                    pointSet1 = np.array(pointSet1).reshape((-1,1,2)).astype(np.int32)
-                    pointSet2 = np.array(pointSet2).reshape((-1,1,2)).astype(np.int32)
-                    pointSetTARGET = np.array(pointSetTARGET).reshape((-1,1,2)).astype(np.int32)
-                    if (len(pointSet1) > 0):
-                        if cv2.contourArea(pointSet1) >=(2500/(wingThresh[2]+1)):
-                            near, far = self.get_nearest_and_furthest_from_centroid(pointSet1, centroid)
-                            if self.get_distance_between_coords(near, centroid) <= 150:
-                                winglength = self.get_distance_between_coords(far, backPoint)
-                                if (winglength <= 1.5*(body_length)) and (winglength >= abd_length):
-                                    wingTips.append(far)
-                                    wholeWings.append(cv2.convexHull(pointSet1))
-                                    wingArea.append(cv2.contourArea(pointSet1))
-                    if (len(pointSet2) > 0):
-                        if cv2.contourArea(pointSet2) >=(2500/(wingThresh[2]+1)):
-                            near, far = self.get_nearest_and_furthest_from_centroid(pointSet2, centroid)
-                            if self.get_distance_between_coords(near, centroid) <= 150:
-                                winglength = self.get_distance_between_coords(far, backPoint)
-                                if (winglength <= 1.5*(body_length)) and (winglength >= abd_length):
-                                    wingTips.append(far)
-                                    wholeWings.append(cv2.convexHull(pointSet2))
-                                    wingArea.append(cv2.contourArea(pointSet2))
+                                if targ_dist <=20.0:
+                                    pointSetTARGET.append(x.tolist())
+                        pointSet1 = np.array(pointSet1).reshape((-1,1,2)).astype(np.int32)
+                        pointSet2 = np.array(pointSet2).reshape((-1,1,2)).astype(np.int32)
+                        pointSetTARGET = np.array(pointSetTARGET).reshape((-1,1,2)).astype(np.int32)
+                        if (len(pointSet1) > 0):
+                            if cv2.contourArea(pointSet1) >=833:#(2500/(wingThresh[2]+1)):
+                                near, far = self.get_nearest_and_furthest_from_centroid(pointSet1, centroid)
+                                if self.get_distance_between_coords(near, centroid) <= 150:
+                                    winglength = self.get_distance_between_coords(far, backPoint)
+                                    if (winglength <= 2.0*(body_length)) and (winglength >= abd_length):
+                                        wingTips.append(far)
+                                        wholeWings.append(pointSet1)#(cv2.convexHull(pointSet1))
+                                        wingArea.append(cv2.contourArea(pointSet1))
+                        if (len(pointSet2) > 0):
+                            if cv2.contourArea(pointSet2) >=833:#(2500/(wingThresh[2]+1)):
+                                near, far = self.get_nearest_and_furthest_from_centroid(pointSet2, centroid)
+                                if self.get_distance_between_coords(near, centroid) <= 150:
+                                    winglength = self.get_distance_between_coords(far, backPoint)
+                                    if (winglength <= 2.0*(body_length)) and (winglength >= abd_length):
+                                        wingTips.append(far)
+                                        wholeWings.append(pointSet2)#(cv2.convexHull(pointSet2))
+                                        wingArea.append(cv2.contourArea(pointSet2))
         return wingTips, wholeWings, wingArea
     
 
@@ -665,8 +691,15 @@ class WingDetector(object):
 	    L.sort()
 	    recur(L)
 	    return best[1]
-            
-                                
+                
+    def get_edge(self, frame):
+        top = frame[0:5].mean()
+        bottom = frame[-5:-1].mean()
+        left = frame[:,0:5].mean()
+        right = frame[:,-5:-1].mean()
+        values = sorted([top, bottom, left, right])[1:]
+        mean = sum(values) / 3.0
+        return mean                           
 
     def get_distance_between_coords(self, A, B):
         return np.sqrt((A[0]-B[0])**2 + (A[1]-B[1])**2)
@@ -710,15 +743,15 @@ class WingDetector(object):
     def get_tracking_thresholds(self, _timestamp, _distance, _dTarget):
 
         if _dTarget <= 4:
-            vals = (80,1,1), (113,1,2), (35,1,1)
+            vals = (65,1,1), (95,1,2), (35,1,1)
         elif _distance <=120:
-            vals =  (70,1,1), (110,1,2), (40,1,1)
+            vals =  (65,1,1), (95,1,2), (40,1,1)
         elif _distance <=150:
-            vals =  (70,1,1), (95,1,2), (40,1,1)
+            vals =  (65,1,1), (95,1,2), (40,1,1)
         elif _distance <=185:
-            vals = (60,1,1), (85,1,2), (30,1,1) #(60,1,1), (80,1,2), (30,1,1)
+            vals = (60,1,1), (80,1,2), (30,1,1) #(60,1,1), (80,1,2), (30,1,1)
         else:
-            vals = (55,1,2), (83,1,2), (35,1,1) #(50,1,1), (79,1,2), (35,1,1)   
+            vals = (40,1,2), (65,1,2), (35,1,1) #(50,1,1), (79,1,2), (35,1,1)   
             
         foo = self.add_nested_tuples(vals, self.adjust_tracking_parameters)
         
