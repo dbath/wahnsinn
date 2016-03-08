@@ -38,28 +38,30 @@ def do_stats(pairs, dataset, group_col, stat_col, time_period):
     return df  
 
 colourlist = ['#8000CC','#2020CC'] 
+
+
 def barplot(grouped_df, _column, statistic):
     means = grouped_df.groupby(level=[0,1]).mean()
     #set_of_groups = set(grouped_df['GROUP']))
-    bar_width = 1.0#/(len(means.index))
+    bar_width = 1.0/(len(means.index))
     error_config = {'ecolor': '0.1'}
     if 'Index' in statistic:
-        sems = grouped_df.groupby(level=[0,1]).sem()
+        sems = grouped_df.groupby(level=[0,1]).sem().fillna(0)
     else:
-        sems = grouped_df.groupby(level=[0,1]).std()  #USE STANDARD DEVIATION, NOT SEM.
+        sems = grouped_df.groupby(level=[0,1]).std().fillna(0)  #USE STANDARD DEVIATION, NOT SEM.
     fig = plt.figure()
     fig.set_size_inches(10,6)
     ax = fig.add_subplot(1,1,1)
     
     plt.bar(np.arange(0.1,(len(means.index)+0.1),1), 
-            means[_column].fillna(0),
-            bar_width, 
+            means[_column].fillna(0), 
             color= '#AAAAAA',
             yerr=sems[_column].fillna(0),
             error_kw=error_config,
             label=list(means.index))
     
-    ax.set_ylim(0,1.3*(means[_column].values.max()))
+    #ax.set_ylim(0,1.3*(means[_column].values.max()))
+    
     if means[_column].values.min() >= 0:
         ax.set_ylim(0,1.1*((means[_column] + sems[_column]).values.max()))
     else:
@@ -70,7 +72,7 @@ def barplot(grouped_df, _column, statistic):
     else:
         ax.set_ylabel(statistic + ' ' + args.parameter + ' ' + u"\u00B1" + ' SD', fontsize=20)
     ax.set_xticks(np.arange(0.1+bar_width/2.0,(len(means.index)+0.1+(bar_width/2.0)),1)) # (bar_width*(len(list_of_genotypes)/2)))
-    ax.set_xticklabels(list(means.index))
+    ax.set_xticklabels(list(means.index), rotation=90)
     ax.tick_params(axis='y', labelsize=16 )
     ax.set_xlabel('Genotype', fontsize=20)
     ax.spines['right'].set_visible(False)
@@ -125,20 +127,23 @@ def timeplot(grouped_df, measurement, statistic):
     
 def get_bouts(_fbf, parameter, threshold, time_period, comparison='greater'):
     d = _fbf[parameter].copy()
-    if time_period == 'prestim':
-        d = d[d.index <= d[(_fbf['Laser1_state'] + _fbf['Laser2_state']) > 0].index[0]]#.dropna()
-    elif time_period == 'stim':
-        d = d[(d.index >= d[(_fbf['Laser1_state'] + _fbf['Laser2_state']) > 0].index[0]) & (d.index <= d[(_fbf['Laser1_state'] + _fbf['Laser2_state']) > 0].index[-1])]#.dropna()
-    if time_period == 'poststim':
-        d = d[d.index > d[(_fbf['Laser1_state'] + _fbf['Laser2_state']) > 0].index[-1]]#.dropna()
-    if time_period == 'red':
-        d = d[(d.index >= d[(_fbf['Laser2_state']) > 0].index[0]) & (d.index <= d[(_fbf['Laser2_state']) > 0].index[-1])]
-    if time_period == 'between':
-        d = d[(d.index >= d[(_fbf['Laser1_state']) > 0].index[-1]) & (d.index <= d[(_fbf['Laser2_state']) > 0].index[0])]
-    if time_period == 'IR':
-        d = d[(d.index >= d[(_fbf['Laser1_state']) > 0].index[0]) & (d.index <= d[(_fbf['Laser1_state']) > 0].index[-1])]
-    add_something=False
-    
+    try:
+        if time_period == 'prestim':
+            d = d[d.index <= d[(_fbf['Laser1_state'] + _fbf['Laser2_state']) > 0].index[0]]#.dropna()
+        elif time_period == 'stim':
+            d = d[(d.index >= d[(_fbf['Laser1_state'] + _fbf['Laser2_state']) > 0].index[0]) & (d.index <= d[(_fbf['Laser1_state'] + _fbf['Laser2_state']) > 0].index[-1])]#.dropna()
+        if time_period == 'poststim':
+            d = d[d.index > d[(_fbf['Laser1_state'] + _fbf['Laser2_state']) > 0].index[-1]]#.dropna()
+        if time_period == 'red':
+            d = d[(d.index >= d[(_fbf['Laser2_state']) > 0].index[0]) & (d.index <= d[(_fbf['Laser2_state']) > 0].index[-1])]
+        if time_period == 'between':
+            d = d[(d.index >= d[(_fbf['Laser1_state']) > 0].index[-1]) & (d.index <= d[(_fbf['Laser2_state']) > 0].index[0])]
+        if time_period == 'IR':
+            d = d[(d.index >= d[(_fbf['Laser1_state']) > 0].index[0]) & (d.index <= d[(_fbf['Laser1_state']) > 0].index[-1])]
+        add_something=False
+    except:
+        add_something=False
+        pass
     period_length = (d.index[-1] - d.index[0]).total_seconds()
     
     if comparison=='greater':
@@ -184,9 +189,13 @@ def get_bouts(_fbf, parameter, threshold, time_period, comparison='greater'):
     
     try:
         df = pd.DataFrame({'ons':ontimes, 'offs':offtimes})
+        if len(df) == 0:
+            df = pd.DataFrame({'ons':[0], 'offs':[0]})
+            print "EMPTY DATAFRAME:    ", _fbf.loc[0, 'group'], df['offs'] - df['ons']
         df['bout_duration'] = df['offs'] - df['ons']
         df['time_period'] = time_period
         df['period_length'] = period_length
+        
     except:
         print len(ontimes), '\n\n\n', len(offtimes)
         print ontimes, '\n\n\n', offtimes
@@ -196,7 +205,7 @@ def get_bouts(_fbf, parameter, threshold, time_period, comparison='greater'):
             df = df[df['bout_duration'] <= 1.0] #np.timedelta64(500,'ms')]
         df = df[df['bout_duration'] >= 0.1250]
     except:
-        df = pd.DataFrame({'ons':ontimes, 'offs':offtimes, 'bout_duration':np.nan, 'time_period':time_period, 'period_length':period_length})
+        df = pd.DataFrame({'ons':ontimes, 'offs':offtimes, 'bout_duration':0, 'time_period':time_period, 'period_length':period_length})
     return df
 
 if __name__ == "__main__":
@@ -221,8 +230,9 @@ if __name__ == "__main__":
     if (DATADIR[-1] != '/'):
         DATADIR = DATADIR + '/'  
         
-    colourlist = ['#202020','#AAAAAA','#009020', '#6699FF', '#333333','#0032FF','r','c','m','y', '#000000'] 
-    time_periods = ['prestim','stim','poststim']
+    colourlist = ['#202020','#AAAAAA','#009020', '#6699FF', '#333333','#0032FF','r','c','m','y', '#000000']
+    time_periods = ['poststim'] 
+    #time_periods = ['prestim','stim','poststim']
     #time_periods = ['prestim','red','between','IR','poststim']
     #time_periods = ['prestim','between','poststim']
     #dataset = pd.DataFrame({'FlyID':[],'GROUP':[],'onset_time':[],'bout_duration':[], 'time_period':[]})
@@ -230,17 +240,25 @@ if __name__ == "__main__":
     for directory in glob.glob(DATADIR  + '*zoom*'):
         #print 'processing: ', directory.split('/')[-1]
         FLY_ID, FMF_TIME, GROUP = parse_fmftime(directory)
-        fbf = pd.read_pickle(directory + '/frame_by_frame_synced.pickle')
-        if 'target_distance_TTM' in fbf.columns:
-            fbf['target_distance_TTM'] = fbf['target_distance_TTM'].fillna(method='pad',limit=2).fillna(fbf['dtarget']/5.0)
-        if 'group' in fbf.columns:
-            GROUP = fbf['group'][0]
-        fbf.loc[fbf['target_distance_TTM'] > 1.0,'Length'] = np.nan
-        fbf.loc[fbf['Length'] <= 225.0,'Length'] = np.nan
-        for p in time_periods:
-            df = get_bouts(fbf, parameter, threshold, p, greater_than)
-            tempdf = pd.DataFrame({'FlyID':FLY_ID,'GROUP':GROUP,'onset_time':df['ons'],'bout_duration':df['bout_duration'], 'time_period':df['time_period'], 'period_length':df['period_length']})
-            dataset = pd.concat([dataset, tempdf], axis=0)
+        try:
+            fbf = pd.read_pickle(directory + '/frame_by_frame_synced.pickle')
+            if 'target_distance_TTM' in fbf.columns:
+                fbf['target_distance_TTM'] = fbf['target_distance_TTM'].fillna(method='pad',limit=2).fillna(fbf['dtarget']/5.0)
+            if 'group' in fbf.columns:
+                GROUP = fbf['group'][0]
+            fbf.loc[fbf['target_distance_TTM'] > 1.0,'Length'] = np.nan
+            fbf.loc[fbf['Length'] <= 225.0,'Length'] = np.nan
+            for p in time_periods:
+                df = get_bouts(fbf, parameter, threshold, p, greater_than)
+                tempdf = pd.DataFrame({'FlyID':FLY_ID,'GROUP':GROUP,'onset_time':df['ons'],'bout_duration':df['bout_duration'], 'time_period':df['time_period'], 'period_length':df['period_length']})
+                g1, g2, g3 = FLY_ID.split('-',2)
+                tempdf['g1'] = g1
+                tempdf['g2'] = g2
+                tempdf['g3'] = g3
+                
+                dataset = pd.concat([dataset, tempdf], axis=0)
+        except:
+            print "failed to acquire data: ", directory.split('/')[-1]
     dataset['normalized_duration'] = 60.0*dataset['bout_duration'] / dataset['period_length']
     dataset.to_pickle(DATADIR + args.parameter +'_'+str(args.threshold)+ '_bouts.pickle')
     grouped = dataset.groupby(['time_period','GROUP','FlyID'])
@@ -273,7 +291,7 @@ if __name__ == "__main__":
     pvals = pd.concat([p_values_duration, p_values_counts, p_values_total_time], keys=['boutLength','count','totalTime'])
     pvals.to_csv(DATADIR + args.parameter +'_'+str(args.threshold)+ '_p_values.csv')
     print "P-VALUES: \n", pvals
-    print dataset['bout_duration'].max()
+    print grouped.mean().groupby(level=[0,1]).count()
     barplot(grouped.mean(), 'bout_duration', 'Mean bout duration')
     barplot(grouped.count(), 'normalized_duration', 'Mean number of bouts per minute')
     barplot(grouped.max(), 'bout_duration','Max. bout duration')
