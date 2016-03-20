@@ -11,8 +11,6 @@ from scipy import stats as st
 from scipy.stats import kruskal
 <<<<<<< HEAD
 import flymad_jaaba.flymad_jaaba_v6
-=======
->>>>>>> 879f6f910e86f41ed3d89cc582e0af1e0d0b9028
 import flymad.fake_plotly as fake_plotly
 import pprint
 import traceback
@@ -34,11 +32,8 @@ def calc_p_values(_data,
     _data['synced_ns'] = _data.index
     df_baseline = _data[_data['Time'] < 10.0]
     align_start = _data.Time.min()
-<<<<<<< HEAD
     dalign = int(_data.Time.max()) - int(align_start)
-=======
     dalign = _data.Time.max() - align_start
->>>>>>> 879f6f910e86f41ed3d89cc582e0af1e0d0b9028
     p_values = DataFrame()
 
     if bin_how=='mean':
@@ -90,7 +85,6 @@ def plot_stats( data, fig_prefix, **kwargs):
     layout=None
     pvalue_results = {}
     for ROI in data.columns[1:]:
-<<<<<<< HEAD
         pairwise_data = get_pairwise( data, ROI, **kwargs)
         if pairwise_data is not None:
             graph_data.append( pairwise_data['data'] )
@@ -101,7 +95,6 @@ def plot_stats( data, fig_prefix, **kwargs):
 
     if len( graph_data )==0:
         print 'length is 0'
-=======
         pairwise_data = get_pairwise( data, stat_colname=ROI, **kwargs)
         if pairwise_data is not None:
             graph_data.append( pairwise_data['data'] )
@@ -109,7 +102,6 @@ def plot_stats( data, fig_prefix, **kwargs):
             pvalue_results[pair] = pairwise_data['df']
 
     if len( graph_data )==0:
->>>>>>> 879f6f910e86f41ed3d89cc582e0af1e0d0b9028
         return
 
     result2 = fake_plotly.plot( graph_data, layout=layout)
@@ -131,17 +123,15 @@ def plot_stats( data, fig_prefix, **kwargs):
 
     return pvalue_results
 
-<<<<<<< HEAD
 def get_pairwise(data, stat_colname, **kwargs):
     layout_title = kwargs.pop('layout_title',None)
     #human_label_dict = kwargs.pop('human_label_dict',None)
     p_values = calc_p_values(data, stat_colname, **kwargs)
-=======
+    
 def get_pairwise(data,**kwargs):
     layout_title = kwargs.pop('layout_title',None)
     #human_label_dict = kwargs.pop('human_label_dict',None)
     p_values = calc_p_values(data, **kwargs)
->>>>>>> 879f6f910e86f41ed3d89cc582e0af1e0d0b9028
     if len(p_values)==0:
         return None
 
@@ -192,14 +182,10 @@ if __name__ == "__main__":
                             help='directory of fmf and bag files')  
     #parser.add_argument('--outputdir', type=str, required=True,
     #                        help='directory to store analysis')
-<<<<<<< HEAD
-=======
     #parser.add_argument('--bagdir', type=str, required=True,
     #                        help='directory of bag files')
     parser.add_argument('--binsize', type=str, required=True,
                             help='integer and unit, such as "5s" or "4Min" or "500ms"')
->>>>>>> 879f6f910e86f41ed3d89cc582e0af1e0d0b9028
-
     
     
        
@@ -209,18 +195,14 @@ if __name__ == "__main__":
     if not DATADIR[-1] == '/' :
         DATADIR = DATADIR + '/'
 
-<<<<<<< HEAD
-=======
 
 
     binsize = (args.binsize)
     print "BINSIZE: ", binsize
->>>>>>> 879f6f910e86f41ed3d89cc582e0af1e0d0b9028
     colourlist = ['#202090','#202020','#AAAAAA','#009020', '#6699FF', '#333333','#0032FF','r','c','m','y', '#000000']
     #colourlist = ['#2020CC','#20CC20','#FFCC20','#CC2000','#202020']
     #colourlist = ['#CC2000','#2020CC','#20CC20','#FFCC20','#CC2000','#202020']
     #filename = '/tier2/dickson/bathd/FlyMAD/DATADIR_tracking/140927/wing_angles_nano.csv'
-<<<<<<< HEAD
     kinetics = DataFrame({'ROI':[], 'ID':[], 'OFFTIME':[]})
     for pickle in glob.glob(DATADIR + 'rawdata/*.pickle'):
         print pickle
@@ -248,7 +230,6 @@ if __name__ == "__main__":
         #print df[0:5]
         df.to_pickle(fname_prefix + '.pickle')
     kinetics.to_csv(DATADIR + 'offtimes.csv', sep=',')
-=======
 
     for pickle in glob.glob(DATADIR + '*.pickle'):
         fname_prefix = pickle.split('.pickle')[0] + '_p-values_'
@@ -258,7 +239,6 @@ if __name__ == "__main__":
                                        num_bins=602,
                                        )
 
->>>>>>> 879f6f910e86f41ed3d89cc582e0af1e0d0b9028
 
 
 
