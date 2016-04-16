@@ -268,177 +268,181 @@ def sync_jaaba_with_ros(FMF_DIR):
         os.makedirs(FMF_DIR + '/TRACKING_FRAMES')
     
     # COMPUTE AND ALIGN DISTANCE TO NEAREST TARGET
-    targets = target_detector.TargetDetector(WIDE_FMF, FMF_DIR)
-    targets.plot_targets_on_background()
-    targets.plot_trajectory_on_background(BAG_FILE)
-    
-    dtarget = targets.get_dist_to_nearest_target(BAG_FILE)['dtarget']
-    (arena_centre), arena_radius = targets._arena.circ
-    
-    if MAKE_MOVIES:
-        TRACKING_DIRECTORY = FMF_DIR + '/TRACKING_FRAMES/'
+    if (os.path.exists(FMF_DIR + '/frame_by_frame_synced.pickle')) and not RETRACK:
+        datadf = pd.read_pickle(FMF_DIR + '/frame_by_frame_synced.pickle')
+        exp_group = EXP_ID #QUICKFIX. FIXME
     else:
-        TRACKING_DIRECTORY = None
-    
-    if (os.path.exists(FMF_DIR + '/wingdata.pickle')) and not RETRACK:
-        datadf = pd.read_pickle(FMF_DIR + '/wingdata.pickle')
-        datadf.columns= ['BodyAxis','leftAngle','leftWingLength','Length','rightAngle','rightWingLength','target_angle_TTM',
-                                 'target_distance_TTM','Timestamp','Width']
-    else:
-        try:
-            wings = wing_detector.WingDetector(ZOOM_FMF, BAG_FILE, dtarget, arena_centre, RETRACK, TRACKING_DIRECTORY )
-            
-            wings.execute()
-            wings.wingData.columns= ['BodyAxis','leftAngle','leftWingLength','Length','rightAngle','rightWingLength','target_angle_TTM',
+        targets = target_detector.TargetDetector(WIDE_FMF, FMF_DIR)
+        targets.plot_targets_on_background()
+        targets.plot_trajectory_on_background(BAG_FILE)
+        
+        dtarget = targets.get_dist_to_nearest_target(BAG_FILE)['dtarget']
+        (arena_centre), arena_radius = targets._arena.circ
+        
+        if MAKE_MOVIES:
+            TRACKING_DIRECTORY = FMF_DIR + '/TRACKING_FRAMES/'
+        else:
+            TRACKING_DIRECTORY = None
+        
+        if (os.path.exists(FMF_DIR + '/wingdata.pickle')) and not RETRACK:
+            datadf = pd.read_pickle(FMF_DIR + '/wingdata.pickle')
+            datadf.columns= ['BodyAxis','leftAngle','leftWingLength','Length','rightAngle','rightWingLength','target_angle_TTM',
                                      'target_distance_TTM','Timestamp','Width']
-            wings.wingData.to_pickle(FMF_DIR + '/wingdata.pickle')
-            wings.tracking_info.to_pickle(FMF_DIR + '/tracking_info.pickle')
-            datadf = DataFrame(wings.wingData)
-        
-        
-            if MAKE_MOVIES:
-                utilities.call_command("ffmpeg -f image2 -r 15 -i "+ TRACKING_DIRECTORY + "_tmp%05d.png -vf scale=iw/2:-1 -vcodec mpeg4 -b 8000k -y " + FMF_DIR + "/tracked_movie.mp4;")
-                utilities.call_command("rm -r " + TRACKING_DIRECTORY)
-                #wings.make_movie(wings._tempdir, wings.fmf_file.rsplit('/',1)[0]+'/tracked_movie.mp4',15)
+        else:
+            try:
+                wings = wing_detector.WingDetector(ZOOM_FMF, BAG_FILE, dtarget, arena_centre, RETRACK, TRACKING_DIRECTORY )
+                
+                wings.execute()
+                wings.wingData.columns= ['BodyAxis','leftAngle','leftWingLength','Length','rightAngle','rightWingLength','target_angle_TTM',
+                                         'target_distance_TTM','Timestamp','Width']
+                wings.wingData.to_pickle(FMF_DIR + '/wingdata.pickle')
+                wings.tracking_info.to_pickle(FMF_DIR + '/tracking_info.pickle')
+                datadf = DataFrame(wings.wingData)
             
+            
+                if MAKE_MOVIES:
+                    utilities.call_command("ffmpeg -f image2 -r 15 -i "+ TRACKING_DIRECTORY + "_tmp%05d.png -vf scale=iw/2:-1 -vcodec mpeg4 -b 8000k -y " + FMF_DIR + "/tracked_movie.mp4;")
+                    utilities.call_command("rm -r " + TRACKING_DIRECTORY)
+                    #wings.make_movie(wings._tempdir, wings.fmf_file.rsplit('/',1)[0]+'/tracked_movie.mp4',15)
+                
+            except Exception,e:
+                traceback.print_exc() 
+                print 'ERROR PROCESSING WING TRACKING...', FMF_DIR
+                print str(e)
+                
+                return
+                
+        datadf['Frame_number'] = datadf.index
+        datadf = convert_timestamps(datadf)
+
+        # ALIGN LASER STATE DATA
+        laser_states = utilities.get_laser_states(BAG_FILE)
+        try:
+            datadf['Laser0_state'] = laser_states['Laser0_state'].asof(datadf.index).fillna(value=1)
+            datadf['Laser1_state'] = laser_states['Laser1_state'].asof(datadf.index).fillna(value=0)  #YAY! 
+            datadf['Laser2_state'] = laser_states['Laser2_state'].asof(datadf.index).fillna(value=0)
+        except:
+            print "\t ERROR: problem interpreting laser current values."
+            datadf['Laser0_state'] = 0
+            datadf['Laser2_state'] = 0
+            datadf['Laser1_state'] = 0
+            
+
+        
+        positions = utilities.get_positions_from_bag(BAG_FILE)
+        positions = utilities.convert_timestamps(positions)
+        datadf['fly_x'] = positions['fly_x'].asof(datadf.index).fillna(method='pad')
+        datadf['fly_y'] = positions['fly_y'].asof(datadf.index).fillna(method='pad')
+        
+        datadf['dcentre'] = np.sqrt(((datadf['fly_x']-arena_centre[0])/4.8)**2 + ((datadf['fly_y']-arena_centre[1])/5.2)**2)
+        datadf['dtarget_temp'] = targets.get_dist_to_nearest_target(BAG_FILE)['dtarget'].asof(datadf.index).fillna(method='pad')
+        datadf.loc[datadf['dtarget_temp'] >=6.0, 'target_distance_TTM'] = np.nan 
+        datadf['dtarget'] = datadf['target_distance_TTM'].fillna(datadf['dtarget_temp'])
+        
+        
+        datadf['Timestamp'] = datadf.index #silly pandas bug for subtracting from datetimeindex...
+        
+        #number_of_bouts, bout_duration, first_TS, last_TS = utilities.detect_stim_bouts(datadf, 'Laser1_state')
+
+        number_of_bouts, stim_duration, first_TS, last_TS = utilities.detect_stim_bouts(datadf, 'Laser2_state')  #HACK DANNO
+        datadf['stim_duration'] = stim_duration
+            
+        try:
+            if stim_duration > 0:
+                datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp[(datadf.Laser2_state + datadf.Laser1_state) > 0.001].index[0]
+            elif stim_duration == 0:
+                datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp.index[0] - pd.to_datetime('60s')
+        except:
+            print "WARNING:   Cannot synchronize by stimulus. Setting T0 to frame 900. "
+            datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp.index[900]
+        datadf.index = datadf.synced_time
+        datadf.index = pd.to_datetime(datadf.index)
+
+        ###    WING EXTENSION    ###
+        datadf['maxWingAngle'] = get_absmax(datadf[['leftAngle','rightAngle']]).fillna(method='pad')
+        datadf['maxWingLength'] = get_absmax(datadf[['leftWingLength','rightWingLength']]).fillna(method='pad')
+        #datadf[datadf['maxWingAngle'] > 3.1] = np.nan
+
+
+
+
+        """
+        program = 'dark'
+        
+        plt.plot(datadf.Timestamp, datadf.Laser0_state, 'b')
+        plt.plot(datadf.Timestamp, datadf.Laser1_state, 'k')
+        plt.plot(datadf.Timestamp, datadf.Laser2_state, 'r')
+        plt.show()
+        
+        if program == 'IRR':
+            BEGINNING =datadf.Timestamp[datadf.synced_time >= -30000000000].index[0]#datadf.Timestamp.index[0]
+            #FIRST_IR_ON = datadf.Timestamp[((datadf.Laser1_state > 0.001) & (datadf.synced_time >= -1))].index[0]
+            FIRST_IR_ON = datadf.Timestamp[datadf.synced_time >= 0].index[0]
+            #FIRST_IR_OFF = datadf.Timestamp[((datadf.Laser1_state > 0.001) & (datadf.synced_time <= 120))].index[-1]
+            FIRST_IR_OFF = datadf.Timestamp[datadf.synced_time >= 60000000000].index[0]
+            RED_ON = datadf.Timestamp[datadf.Laser2_state > 0.001].index[0]
+            RED_OFF = datadf.Timestamp[datadf.Laser2_state > 0.001].index[-1]
+            SECOND_IR_ON = datadf.Timestamp[datadf.synced_time >=320000000000].index[0]
+            #SECOND_IR_ON = datadf.Timestamp[((datadf.Laser1_state > 0.001) & (datadf.synced_time >= 120))].index[0]
+            SECOND_IR_OFF = datadf.Timestamp[datadf.Laser1_state > 0.001].index[-1]
+            END = datadf.Timestamp.index[-1]
+            
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE, background=False)
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE, BEGINNING, FIRST_IR_ON, '1-prestim', background=False)
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE, FIRST_IR_ON, FIRST_IR_OFF, '2-IR1', background=False)
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE, FIRST_IR_OFF, RED_ON, '3-post-IR1', background=False)
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE, RED_ON,RED_OFF, '4-red', background=False)
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE,RED_OFF, SECOND_IR_ON,'5-post-red', background=False)
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE,SECOND_IR_ON,SECOND_IR_OFF,'6-IR2', background=False)
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE,SECOND_IR_OFF,END,'7-post-IR2', background=False)
+        
+        
+        
+        if program == 'dark':
+            BEGINNING =datadf.Timestamp[datadf.synced_time >= -30000000000].index[0]
+            print set(datadf.Laser0_state), set(datadf.Laser1_state), set(datadf.Laser2_state)
+            STIM_ON = datadf.Timestamp[datadf.Laser1_state > 0.001].index[0]
+            STIM_OFF = datadf.Timestamp[datadf.Laser1_state > 0.001].index[-1]
+            LIGHTS_OUT = datadf.Timestamp[datadf.Laser0_state < 0.001].index[0]
+            LIGHTS_ON = datadf.Timestamp[datadf.Laser0_state < 0.001].index[-1]
+            END = datadf.Timestamp.index[-1]
+            
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE, BEGINNING, STIM_ON, '1-prestim', background=False)
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE, STIM_ON,STIM_OFF, '2-stim', background=False)
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE, STIM_OFF, LIGHTS_OUT,'3-post-stim', background=False)
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE, LIGHTS_OUT, LIGHTS_ON,'4-DARK', background=False)
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE, LIGHTS_ON, END,'7-light', background=False)
+            
+        """
+        
+        try:
+            targets.plot_trajectory_and_wingext(datadf, BAG_FILE)
         except Exception,e:
-            traceback.print_exc() 
-            print 'ERROR PROCESSING WING TRACKING...', FMF_DIR
-            print str(e)
-            
-            return
-            
-    datadf['Frame_number'] = datadf.index
-    datadf = convert_timestamps(datadf)
-
-    # ALIGN LASER STATE DATA
-    laser_states = utilities.get_laser_states(BAG_FILE)
-    try:
-        datadf['Laser0_state'] = laser_states['Laser0_state'].asof(datadf.index).fillna(value=1)
-        datadf['Laser1_state'] = laser_states['Laser1_state'].asof(datadf.index).fillna(value=0)  #YAY! 
-        datadf['Laser2_state'] = laser_states['Laser2_state'].asof(datadf.index).fillna(value=0)
-    except:
-        print "\t ERROR: problem interpreting laser current values."
-        datadf['Laser0_state'] = 0
-        datadf['Laser2_state'] = 0
-        datadf['Laser1_state'] = 0
+                traceback.print_exc() 
+                print 'ERROR generating targeting plot:', FMF_DIR
+                print str(e)
+                
+        ### ABDOMINAL BENDING   ###
+        #datadf[datadf['Length'] > 110] = np.nan  #discard frames with bogus length.  *************
+        #datadf[datadf['Length'] < 60] = np.nan  #discard frames with bogus length.
         
-
-    
-    positions = utilities.get_positions_from_bag(BAG_FILE)
-    positions = utilities.convert_timestamps(positions)
-    datadf['fly_x'] = positions['fly_x'].asof(datadf.index).fillna(method='pad')
-    datadf['fly_y'] = positions['fly_y'].asof(datadf.index).fillna(method='pad')
-    
-    datadf['dcentre'] = np.sqrt(((datadf['fly_x']-arena_centre[0])/4.8)**2 + ((datadf['fly_y']-arena_centre[1])/5.2)**2)
-    datadf['dtarget_temp'] = targets.get_dist_to_nearest_target(BAG_FILE)['dtarget'].asof(datadf.index).fillna(method='pad')
-    datadf.loc[datadf['dtarget_temp'] >=6.0, 'target_distance_TTM'] = np.nan 
-    datadf['dtarget'] = datadf['target_distance_TTM'].fillna(datadf['dtarget_temp'])
-    
-    
-    datadf['Timestamp'] = datadf.index #silly pandas bug for subtracting from datetimeindex...
-    
-    #number_of_bouts, bout_duration, first_TS, last_TS = utilities.detect_stim_bouts(datadf, 'Laser1_state')
-
-    number_of_bouts, stim_duration, first_TS, last_TS = utilities.detect_stim_bouts(datadf, 'Laser2_state')  #HACK DANNO
-    datadf['stim_duration'] = stim_duration
+        trace = plot_single_trace(datadf)
+        trace.savefig(DATADIR + 'TRACES/' + FLY_ID + '.png')
+        plt.close('all')
         
-    try:
-        if stim_duration > 0:
-            datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp[(datadf.Laser2_state + datadf.Laser1_state) > 0.001].index[0]
-        elif stim_duration == 0:
-            datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp.index[0] - pd.to_datetime('60s')
-    except:
-        print "WARNING:   Cannot synchronize by stimulus. Setting T0 to frame0. "
-        datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp.index[0]
-    datadf.index = datadf.synced_time
-    datadf.index = pd.to_datetime(datadf.index)
-
-    ###    WING EXTENSION    ###
-    datadf['maxWingAngle'] = get_absmax(datadf[['leftAngle','rightAngle']]).fillna(method='pad')
-    datadf['maxWingLength'] = get_absmax(datadf[['leftWingLength','rightWingLength']]).fillna(method='pad')
-    #datadf[datadf['maxWingAngle'] > 3.1] = np.nan
-
-
-
-
-    """
-    program = 'dark'
-    
-    plt.plot(datadf.Timestamp, datadf.Laser0_state, 'b')
-    plt.plot(datadf.Timestamp, datadf.Laser1_state, 'k')
-    plt.plot(datadf.Timestamp, datadf.Laser2_state, 'r')
-    plt.show()
-    
-    if program == 'IRR':
-        BEGINNING =datadf.Timestamp[datadf.synced_time >= -30000000000].index[0]#datadf.Timestamp.index[0]
-        #FIRST_IR_ON = datadf.Timestamp[((datadf.Laser1_state > 0.001) & (datadf.synced_time >= -1))].index[0]
-        FIRST_IR_ON = datadf.Timestamp[datadf.synced_time >= 0].index[0]
-        #FIRST_IR_OFF = datadf.Timestamp[((datadf.Laser1_state > 0.001) & (datadf.synced_time <= 120))].index[-1]
-        FIRST_IR_OFF = datadf.Timestamp[datadf.synced_time >= 60000000000].index[0]
-        RED_ON = datadf.Timestamp[datadf.Laser2_state > 0.001].index[0]
-        RED_OFF = datadf.Timestamp[datadf.Laser2_state > 0.001].index[-1]
-        SECOND_IR_ON = datadf.Timestamp[datadf.synced_time >=320000000000].index[0]
-        #SECOND_IR_ON = datadf.Timestamp[((datadf.Laser1_state > 0.001) & (datadf.synced_time >= 120))].index[0]
-        SECOND_IR_OFF = datadf.Timestamp[datadf.Laser1_state > 0.001].index[-1]
-        END = datadf.Timestamp.index[-1]
-        
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE, background=False)
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE, BEGINNING, FIRST_IR_ON, '1-prestim', background=False)
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE, FIRST_IR_ON, FIRST_IR_OFF, '2-IR1', background=False)
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE, FIRST_IR_OFF, RED_ON, '3-post-IR1', background=False)
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE, RED_ON,RED_OFF, '4-red', background=False)
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE,RED_OFF, SECOND_IR_ON,'5-post-red', background=False)
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE,SECOND_IR_ON,SECOND_IR_OFF,'6-IR2', background=False)
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE,SECOND_IR_OFF,END,'7-post-IR2', background=False)
-    
-    
-    
-    if program == 'dark':
-        BEGINNING =datadf.Timestamp[datadf.synced_time >= -30000000000].index[0]
-        print set(datadf.Laser0_state), set(datadf.Laser1_state), set(datadf.Laser2_state)
-        STIM_ON = datadf.Timestamp[datadf.Laser1_state > 0.001].index[0]
-        STIM_OFF = datadf.Timestamp[datadf.Laser1_state > 0.001].index[-1]
-        LIGHTS_OUT = datadf.Timestamp[datadf.Laser0_state < 0.001].index[0]
-        LIGHTS_ON = datadf.Timestamp[datadf.Laser0_state < 0.001].index[-1]
-        END = datadf.Timestamp.index[-1]
-        
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE, BEGINNING, STIM_ON, '1-prestim', background=False)
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE, STIM_ON,STIM_OFF, '2-stim', background=False)
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE, STIM_OFF, LIGHTS_OUT,'3-post-stim', background=False)
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE, LIGHTS_OUT, LIGHTS_ON,'4-DARK', background=False)
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE, LIGHTS_ON, END,'7-light', background=False)
-        
-    """
-    
-    try:
-        targets.plot_trajectory_and_wingext(datadf, BAG_FILE)
-    except Exception,e:
-            traceback.print_exc() 
-            print 'ERROR generating targeting plot:', FMF_DIR
-            print str(e)
-            
-    ### ABDOMINAL BENDING   ###
-    #datadf[datadf['Length'] > 110] = np.nan  #discard frames with bogus length.  *************
-    #datadf[datadf['Length'] < 60] = np.nan  #discard frames with bogus length.
-    
-    trace = plot_single_trace(datadf)
-    trace.savefig(DATADIR + 'TRACES/' + FLY_ID + '.png')
-    plt.close('all')
-    
-    ########## GROUPING INFORMATION ######
-    if DOSE_RESPONSE:
-        stim_duration_group = find_nearest(STIM_GROUPS, stim_duration)
-        exp_group = str(number_of_bouts) + 'x_' + str(stim_duration_group) + 'ms'
+        ########## GROUPING INFORMATION ######
+        if DOSE_RESPONSE:
+            stim_duration_group = find_nearest(STIM_GROUPS, stim_duration)
+            exp_group = str(number_of_bouts) + 'x_' + str(stim_duration_group) + 'ms'
+            datadf['group'] = exp_group
+            print EXP_ID, exp_group
+        else:
+            exp_group = EXP_ID    
+        #courted, latency = latency_measures(datadf)
         datadf['group'] = exp_group
-        print EXP_ID, exp_group
-    else:
-        exp_group = EXP_ID    
-    #courted, latency = latency_measures(datadf)
-    datadf['group'] = exp_group
-    
-    datadf.to_pickle(FMF_DIR + '/frame_by_frame_synced.pickle')
-    datadf.to_csv(FMF_DIR + '/frame_by_frame_synced.csv', sep=',')
+        
+        datadf.to_pickle(FMF_DIR + '/frame_by_frame_synced.pickle')
+        datadf.to_csv(FMF_DIR + '/frame_by_frame_synced.csv', sep=',')
     
     if 'binsize' in globals():
         datadf = bin_data(datadf, binsize)
@@ -498,6 +502,8 @@ def pool_genotypes(df):
 def group_data(raw_pickle):
     df = pd.read_pickle(raw_pickle)
     df = pool_genotypes(df)
+    if 'GROUP' in df.columns: #HACK MAKE COMPATIBLE WITH OLD DATA
+        df['group'] = df['GROUP']
     grouped = df.groupby(['group', df.index])
     means = grouped.mean()
     ns = grouped.count()
@@ -557,7 +563,7 @@ def plot_data(means, sems, ns, measurement):
         nsems = []
         for w in means.ix[x].index:
             laser_x.append((w-pd.to_datetime(0)).total_seconds())
-            if ns.ix[x]['FlyID'][w] >= ((max_n)-6): #(max_n/3):
+            if ns.ix[x]['FlyID'][w] > ((max_n)-1): #(max_n/3):
                 x_range.append((w-pd.to_datetime(0)).total_seconds())
                 #print ns.ix[x]['FlyID'][w]
                 x_values.append((w-pd.to_datetime(0)).total_seconds())
@@ -690,7 +696,8 @@ if __name__ == "__main__":
 
     binsize = (args.binsize)
     print "BINSIZE: ", binsize
-    colourlist = ['#202090','#202020','#AAAAAA','#009020', '#6699FF', '#333333','#0032FF','r','c','m','y', '#000000']
+    colourlist = ['#0033CC','#33CC33','#FFAA00', '#CC3300', '#AAAAAA','#0032FF','r','c','m','y', '#000000', '#333333']
+    #colourlist = ['#202090','#202020','#AAAAAA','#009020', '#6699FF', '#333333','#0032FF','r','c','m','y', '#000000']
     #colourlist = ['#2020CC','#20CC20','#FFCC20','#CC2000','#202020']
     #colourlist = ['#CC2000','#2020CC','#20CC20','#FFCC20','#CC2000','#202020']
     #filename = '/tier2/dickson/bathd/FlyMAD/DATADIR_tracking/140927/wing_angles_nano.csv'
@@ -719,7 +726,8 @@ if __name__ == "__main__":
     _filelist = []
     for _directory in glob.glob(DATADIR + '*' + HANDLE + '*' + '*zoom*'):
         _filelist.append(_directory)
-    for directory in np.arange(len(_filelist)):    
+    for directory in np.arange(len(_filelist)): 
+        print _filelist[directory]   
         FLY_ID, FMF_TIME, GROUP = parse_fmftime(_filelist[directory])
         if not (os.path.exists(DATADIR + 'JAR/' + FLY_ID + '_' + binsize + '_fly.pickle') ==True):
             p = Process(target=sync_jaaba_with_ros, args=(_filelist[directory],))
@@ -733,8 +741,7 @@ if __name__ == "__main__":
                 elif _filelist[directory] == _filelist[-1]:
                     threadcount=0
                     p.join()
-
-            
+        
 
     gather_data(glob.glob(DATADIR + 'JAR/*' + HANDLE + '*' + binsize + '_fly.pickle'))
     
@@ -765,7 +772,7 @@ if __name__ == "__main__":
         pp = view_pairwise_stats(rawdata, list(set(rawdata.group)), fname_prefix,
                                        stat_colname=measurement,
                                        layout_title=('Kruskal-Wallis H-test: ' + measurement),
-                                       num_bins=len(set(rawdata.index))/50,
+                                       num_bins=len(set(rawdata.index))/10,
                                        )
 
 

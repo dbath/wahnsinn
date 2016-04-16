@@ -1,10 +1,8 @@
 
 from matplotlib.colors import LogNorm
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy import stats
 import glob
 import argparse
 
@@ -49,51 +47,26 @@ def doit(_DATADIR, _HANDLE):
             axes = plt.subplot2grid((1,49),(0,48), colspan=1)
             plt.colorbar(cax=axes)
 
-    plt.savefig(_DATADIR + 'position_plots_' + _HANDLE + '.svg', bbox_inches='tight')
+    plt.savefig(_DATADIR + 'dtarget_v_Length_' + _HANDLE + '.svg', bbox_inches='tight')
     return
 
 def row_of_heatmaps(_DATADIR, _HANDLE, _treatments, _fig, row):
     for x in np.arange(0,len(_treatments)):
         datadf = pd.DataFrame({'left':[], 'right':[]})
-        for f in glob.glob(_DATADIR + _HANDLE + '-UC1538-' + _treatments[x] + '*/tracking_info.pickle'):
+        for f in glob.glob(_DATADIR + _HANDLE + '-UC1538-' + _treatments[x] + '*/frame_by_frame_synced.pickle'):
             df = pd.read_pickle(f)
-            df.index.names=['Frame_number']
-            try:
-                fbf = pd.read_pickle(f.rsplit('/',1)[0] + '/frame_by_frame_synced.pickle')
-                fbf['dtarget'] = fbf['target_distance_TTM_smoothed']
-                ds = fbf['dtarget']
-                ds.index = fbf['Frame_number']
-                df = pd.concat([df,ds], axis=1, join='outer')
-            except:
-                continue
-            df = df[(df.a_wingAngle_left.notnull()) & (df.b_wingAngle_right.notnull())]
+            df['target_distance_TTM'] = df['target_distance_TTM'].fillna(method='pad',limit=2).fillna(df['dtarget'])
+            df = df[(df.Length.notnull()) & (df.target_distance_TTM.notnull())]
             datadf = pd.concat([datadf, df], axis=0)
-        foo = datadf[['a_wingAngle_left','b_wingAngle_right']]
-        foo.columns = ['left','right']
-        foo['maxAngle'] = foo.max(axis=1)
-        foo['minAngle'] = foo.min(axis=1)
-        foo['laterality'] = (foo['maxAngle'] - foo['minAngle'] )* foo['maxAngle']
-        foo['dtarget'] = datadf['dtarget']
-        foo.to_pickle(_DATADIR + _HANDLE + '-UC1538-' + _treatments[x] + '_laterality_scores.pickle')
-        
-        coefficients = np.polyfit(foo.maxAngle.values, foo.laterality.values, 2)
-        coeff_07200 = [ 0.99006412, -0.1036647,   0.0041638 ]
-
-        polynomial = np.poly1d(coeff_07200)
-        
-        print _HANDLE, _treatments[x], '\n', polynomial, '\n', coefficients
-        
-        foo = foo[foo.laterality < (polynomial(foo.maxAngle) - 0.4)]
+        foo = datadf[['Length','target_distance_TTM']]
+        foo.columns = ['Angle','Distance']
         
         ax = _fig.add_subplot(3,4, 4*row+x+1)
-        
-        plt.hist2d(foo.maxAngle.values, foo.laterality.values, bins=50, norm=LogNorm())
+        plt.hist2d(foo.Distance.values, foo.Angle.values, bins=50, norm=LogNorm())
         if row == 0:
             ax.set_title(_treatments[x])
-        if row == 2:
-            ax.set_xlabel('Wing Angle')
         if x == 0:
-            ax.set_ylabel(_HANDLE + '\nLaterality score')
+            ax.set_ylabel(_HANDLE + '\nWing Angle (rad)')
         #ax.set_xlim(0,1.6)
         #ax.set_ylim(0,1)
     return

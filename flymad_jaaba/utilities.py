@@ -93,17 +93,16 @@ def get_positions_from_bag(BAG_FILE):
         baginfo.append((t.secs +t.nsecs*1e-9,msg.fly_x, msg.fly_y))
     baginfo = DataFrame(baginfo, columns=['Timestamp', 'fly_x', 'fly_y'], dtype=np.float64)
     return baginfo
-"""
-def binarize_laser_data(BAG_FILE, laser_number):
+
+def get_laser_current(BAG_FILE, laser_number):
     bagfile = rosbag.Bag(BAG_FILE)
     laser_current = []
     for topic, msg, t in bagfile.read_messages('/flymad_micro/'+laser_number+'/current'):
         laser_current.append((t.secs +t.nsecs*1e-9,msg.data))
     laser_data = DataFrame(laser_current, columns=['Timestamp', 'Laser_state'], dtype=np.float64)
-    laser_data['Laser_state'][laser_data['Laser_state'] > 0.0] = 1.0
     laser_data = convert_timestamps(laser_data)
     return laser_data
-"""
+
 def binarize_laser_data(BAG_FILE, laser_number):
     bagfile = rosbag.Bag(BAG_FILE)
     laser_current = []

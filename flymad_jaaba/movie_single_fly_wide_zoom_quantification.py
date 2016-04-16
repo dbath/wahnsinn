@@ -53,7 +53,7 @@ def make_panel(flyInstance, row, column, _frame_number, FLY_LABEL):
         ax3 = plt.subplot2grid((60,200), (42,6), colspan=194, rowspan=10)
         
         fig.add_axes(ax3)
-        flyInstance.plot_extending_line(timestamp, ax3, 'dtarget', '#0033CC', 'Distance (px)', _left_bound, _right_bound, 'w_titles')        
+        flyInstance.plot_extending_line(timestamp, ax3, 'dtarget', '#0033CC', 'Distance (mm)', _left_bound, _right_bound, 'w_titles')        
         
         #ax5 is a vertical label on the left side
         
@@ -96,8 +96,10 @@ if __name__ == "__main__":
         
     image_height = (fly.get_frame(0)[0].shape[0] )*2
     
-    image_width = fly.get_frame(0)[0].shape[1] *2
-    for frame_number in range(9450):#ctrlfly.get_n_frames()):
+    image_width = fly.get_frame(0)[0].shape[1] *2:
+    if not os.path.exists(savedir + '/temp_png):
+        os.makedirs(savedir + '/temp_png) 
+    for frame_number in range(fly.get_n_frames()):
            
         if os.path.exists(savedir + '/temp_png/_tmp%05d.png'%(frame_number)):
             continue
@@ -108,7 +110,8 @@ if __name__ == "__main__":
         plt.savefig(savedir + '/temp_png/_tmp%05d.png'%(frame_number), bbox_inches='tight', pad_inches=0)
         plt.close('all')  
         print 'added png: ', frame_number
-
+    utilities.call_command("ffmpeg -f image2 -r 15 -i "+ savedir + "/temp_png/_tmp%05d.png -vf scale=iw/2:-1 -vcodec mpeg4 -b 8000k -y " + savedir[:-1] + ".mp4;")
+    utilities.call_command("rm -r " + savedir)
 
     utilities.sendMail('bathd@janelia.hhmi.org','movie is finished', ('Your awesome new video has finished.'))
     

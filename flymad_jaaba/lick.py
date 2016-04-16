@@ -244,17 +244,6 @@ if __name__ == "__main__":
     if (DATADIR[-1] != '/'):
         DATADIR = DATADIR + '/'
 
-    """
-    for x in glob.glob(DATADIR + '*zoom*/*.fmf'):
-        if not os.path.exists(x.rsplit('/',1)[0] + '/proboscis_data.pickle'):
-            print "processing: ", x.split('/')[-1]
-            #try:
-            _tracking = x.rsplit('/',1)[0] + '/tracking_info.pickle'
-            _ = track_proboscis(x, _tracking)
-            #except:
-            #    print "unable to process: ", x.split('/')[-1]
-     """ 
- 
     threadcount = 0
     _filelist = []
     for _directory in glob.glob(DATADIR + '*zoom*/*.fmf'):
