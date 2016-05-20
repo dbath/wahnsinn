@@ -1,6 +1,7 @@
 
 import os, fnmatch
 import pandas as pd
+import scipy.stats as ss
 from pandas import DataFrame
 import numpy as np
 import glob
@@ -212,5 +213,68 @@ def get_calibration_asof_filename(filename):
         if cal_time <= ftime:
             cal_file = x
     return cal_file
-        
+
+
+def get_pairs(list_of_names):
+    pairs = []
+    for i,name1 in enumerate(list_of_names):
+        for j, name2 in enumerate(list_of_names):
+            if j<=i:
+                continue
+            #if (focus in name1.split('-')) or (focus in name2.split('-')):
+            pairs.append( (name1, name2 ) )
+    return pairs
+
+def stats_pairwise(_dataset, _column, _within, _between):
+    fulldf = pd.DataFrame()
+    for grp in list(set(_dataset[_within])):
+        df = _dataset[_dataset[_within] == grp] 
+        g = df.groupby(_between)
+        groups = list(g.groups)
+        data = [col for col_name, col in g[_column]]
+        datanames = [col_name for col_name, col in g[_column]]
+        #pairs = get_pairs(g.groups)
+        p_vals = []
+        pairs = []
+        for pair in get_pairs(range(len(data))):
+            T, P = ss.kruskal(data[pair[0]], data[pair[1]])
+            p_vals.append(P)
+            pairs.append((datanames[pair[0]], datanames[pair[1]]))
+        tempdf = pd.DataFrame({'within':grp, 'between':pairs, 'measure':_column, 'p':p_vals})
+        fulldf = pd.concat([fulldf,tempdf], axis=0)     
+    return fulldf    
+
+def barplot(grouped_df, _column, statistic, levels=[0]):
+    means = grouped_df.groupby(level=levels).mean()
+    bar_width = 1.0/(len(means.index))
+    error_config = {'ecolor': '0.1'}
+    sems = grouped_df.groupby(level=levels).sem().fillna(0)
+    fig = plt.figure()
+    fig.set_size_inches(10,6)
+    ax = fig.add_subplot(1,1,1)
+    
+    plt.bar(np.arange(0.1,(len(means.index)+0.1),1), 
+            means[_column].fillna(0), 
+            color= '#AAAAAA',
+            yerr=sems[_column].fillna(0),
+            error_kw=error_config,
+            label=list(means.index))
+
+    if means[_column].values.min() >= 0:
+        ax.set_ylim(0,1.1*((means[_column] + sems[_column]).values.max()))
+    else:
+        ax.set_ylim(1.1*((means[_column] - sems[_column]).values.min()),1.1*((means[_column] + sems[_column]).values.max()))
+    
+    ax.set_ylabel(statistic + ' ' + u"\u00B1" + ' SEM', fontsize=20)   # +/- sign is u"\u00B1"
+    ax.set_xticks(np.arange(0.1+bar_width/2.0,(len(means.index)+0.1+(bar_width/2.0)),1)) 
+    ax.set_xticklabels(list(means.index), rotation=90)
+    ax.tick_params(axis='y', labelsize=16 )
+    ax.set_xlabel('Group', fontsize=20)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.yaxis.set_ticks_position('left')
+    ax.xaxis.set_ticks_position('bottom')
+    return fig
+
+
         
