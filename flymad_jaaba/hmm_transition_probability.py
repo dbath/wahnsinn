@@ -94,7 +94,27 @@ def smooth(df, colname):
     df[colname + '_smoothed'] = ukf.smooth(df[colname].values)[0]
     return df  
 
-
+def get_hmm_bouts(state_series, _column=['state']):
+    """pass a series of integers representing HMM states, with a timeseries index from fbf"""
+    df = pd.DataFrame({'state':[],'mean_bout':[], 'bout_count':[], 'mean_ibi':[], 'ibi_count':[]})
+    for S in list(set(state_series[_column])):
+        d = state_series[_column].copy()
+        d[d != S] = np.nan
+        d[d == S] = 1
+        d = d.fillna(0)
+        t = d - d.shift()
+        ONS = t[t >0].index
+        OFFS = t[t < 0].index       
+        if ONS[0] < OFFS[0]:
+            if len(ONS) > len(OFFS):
+                OFFS.append(d.index[-1])     
+        elif ONS[0] > OFFS[0]:
+            if len(OFFS) > len(ONS):
+                ONS.insertFIXME(d.index[-1])
+            bouts = (OFFS - ONS) / np.timedelta64(1,'s') #returns np array of seconds
+            
+            
+            
 
 if __name__ == "__main__":
 
@@ -105,6 +125,8 @@ if __name__ == "__main__":
                             help='parameters to define HMM')
     parser.add_argument('--n_components', type=int, required=False, default=6,
                             help='number of components in HMM')
+    parser.add_argument('--pool_controls', type=bool, required=False, default=False,
+                            help='Make true to pool control genotypes')
     
     args = parser.parse_args()
     parameters = [str(item) for item in args.parameters.split(',')]
@@ -221,13 +243,18 @@ if __name__ == "__main__":
                 state_values.loc[state_values['state']==i, 'state'] = np.nan
                 #DISCARD = True
         state_values['state'] = state_values['state'].fillna(method='pad').fillna(method='bfill')
-        state_values = np.array(state_values['state']) #go back to np array
-        if 1:#not DISCARD:
-            transmat_temp = transition_matrix(state_values, n_components)
-            transmat = transmat.append(pd.Series([FLY_ID, GROUP] + list(transmat_temp.ravel()) , 
-                                     index=tmatcolumns), ignore_index=True)
-            state_means = state_means.append(pd.Series([FLY_ID, GROUP] + [float(len(state_values[state_values==x]))/float(len(state_values)) for x in np.arange(n_components)],index=statecolumns), ignore_index=True)
-            wing_vs_state = np.row_stack([wing_vs_state,np.column_stack([state_values,X])])
+        state_values = np.array(state_values['state']) 
+        
+        statesdf = pd.DataFrame(state_values, columns=['state'], index = _fbf.index)
+        
+        bouts = get_hmm_bouts(statesdf)
+        
+        transmat_temp = transition_matrix(state_values, n_components)
+        transmat = transmat.append(pd.Series([FLY_ID, GROUP] + list(transmat_temp.ravel()) , 
+                                 index=tmatcolumns), ignore_index=True)
+        state_means = state_means.append(pd.Series([FLY_ID, GROUP] + [float(len(state_values[state_values==x]))/float(len(state_values)) for x in np.arange(n_components)],index=statecolumns), ignore_index=True)
+        
+        wing_vs_state = np.row_stack([wing_vs_state,np.column_stack([state_values,X])])
             
             
     for x in transmat.index:
@@ -248,8 +275,9 @@ if __name__ == "__main__":
     state_means.to_csv(DATADIR + 'HMM_state_means_'+ str(n_components) +'.csv', sep=',')
     print state_means.groupby('group').mean()
     
-    transmat.loc[transmat['g1'] =='DB072', 'g1'] = 'ctrl'
-    transmat.loc[transmat['g1'] =='DB185', 'g1'] = 'ctrl'
+    if args.pool_controls:
+        transmat.loc[transmat['g1'] =='DB072', 'g1'] = 'ctrl'
+        transmat.loc[transmat['g1'] =='DB185', 'g1'] = 'ctrl'
     p_values = pd.DataFrame()
     grouped = transmat.groupby(['g1','g3','FlyID'])
     for t in tmatcolumns[2:]:
