@@ -357,11 +357,13 @@ if __name__ == "__main__":
     dataset = pd.DataFrame()
     for directory in glob.glob(DATADIR  + '*zoom*'):
         #print 'processing: ', directory.split('/')[-1]
-        FLY_ID, FMF_TIME, GROUP = parse_fmftime(directory)
         try:
             fbf = pd.read_pickle(directory + '/frame_by_frame_synced.pickle')
         except:
             continue
+        FLY_ID, FMF_TIME, GROUP = parse_fmftime(directory)
+        if GROUP != FLY_ID.split('_')[0]:
+            1/0
         if 'target_distance_TTM' in fbf.columns:
             fbf['target_distance_TTM'] = fbf['target_distance_TTM'].fillna(method='pad',limit=3).fillna(fbf['dtarget']).fillna(fbf['dtarget'].max())
         if 'group' in fbf.columns:
@@ -389,15 +391,16 @@ if __name__ == "__main__":
             df = get_bouts(fbf, (parameter + '_smoothed'), threshold, p, greater_than)
             try:
                 tempdf = pd.DataFrame({'FlyID':FLY_ID,'GROUP':GROUP,'onset_time':df['ons'],'offset_time':df['offs'],'bout_duration':df['bout_duration'], 'time_period':df['time_period'], 'period_length':df['period_length']})
+                g1, g2, g3 = FLY_ID.split('_')[0].split('-',2)
+                tempdf['g1'] = g1
+                tempdf['g2'] = g2
+                tempdf['g3'] = g3
+                
+                dataset = pd.concat([dataset, tempdf], axis=0)
+                print "\t finished: ", directory.split('/')[-1]
             except:
                 print FLY_ID, '\n',GROUP, '\n',df
-            g1, g2, g3 = FLY_ID.split('_')[0].split('-',2)
-            tempdf['g1'] = g1
-            tempdf['g2'] = g2
-            tempdf['g3'] = g3
-            
-            dataset = pd.concat([dataset, tempdf], axis=0)
-            print "\t finished: ", directory.split('/')[-1]
+
         #except:
         #    print "failed to acquire data: ", directory.split('/')[-1]
     
@@ -406,7 +409,29 @@ if __name__ == "__main__":
     
     grouped = dataset.groupby(['time_period','GROUP','FlyID'])
     
-    pairs = generate_all_pairs(list(set(dataset['GROUP'])))
+    pvalues = pd.DataFrame()
+    for G in sorted(list(set(dataset.g3))):
+        d = dataset[dataset['g3'] == G]
+        groups = sorted(list(set(d['GROUP'])))
+        pairs = generate_all_pairs(groups)
+        p_values = do_stats(pairs, d, 'GROUP','normalized_duration','poststim')
+        pvalues = pd.concat([pvalues, p_values])
+    print pvalues
+    pvalues.to_csv(DATADIR + args.parameter +'_'+str(args.threshold)+ '_p_values_unweighted.csv')
+    '''
+    #GROUPING BY FLY:
+    for G in sorted(list(set(dataset.g3))):
+        d = dataset[dataset['g3'] == G]
+        means = d.groupby('FlyID').mean().reset_index()
+        counts = d.groupby('FlyID').count().reset_index()
+        for row in means.index:
+            means.loc[row, 'GROUP'] = means.loc[row, 'FlyID'].split('_')[0]
+
+        counts['GROUP'] = means['GROUP']
+        groups = sorted(list(set(d['GROUP'])))
+        pairs = generate_all_pairs(groups)
+        p_values = do_stats(pairs, counts, 'GROUP','normalized_duration','poststim')
+        print p_values
 
     
     p_values_total_time = pd.DataFrame()
@@ -451,7 +476,7 @@ if __name__ == "__main__":
 
     barplot(grouped.mean(), 'bout_duration', 'Mean duration')
     barplot(grouped.max(), 'bout_duration','Max. duration')
-    
+    '''
     grouped = dataset.groupby(['g1','g3','FlyID'])
     lineplot(grouped.mean(), 'bout_duration', 'Mean duration')
     lineplot(grouped.max(), 'bout_duration','Max. duration')
