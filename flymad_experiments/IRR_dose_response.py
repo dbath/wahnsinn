@@ -61,7 +61,7 @@ class Experiment:
         RED_BOUTS        = args.stimbouts
         T_RED_ON         = args.stimlength
         T_RED_OFF        = args.recoverlength
-        T_WAIT4         = 600
+        T_WAIT4         = 600 - (args.stimbouts)*((args.stimlength)+(args.recoverlength))
 
         RED_LASER = LASER2_ON
         IR_LASER  = LASER1_ON

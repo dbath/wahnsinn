@@ -25,7 +25,7 @@ class Experiment:
         self._red_laser_conf = rospy.Publisher('/flymad_micro/laser2/configuration',
                                             flymad.msg.LaserConfiguration,
                                             latch=True) #latched so message is guarenteed to arrive
-        self._red_laser_conf.publish(enable=True, frequency=0,intensity=0.0)
+        self._red_laser_conf.publish(enable=True, frequency=25.0,intensity=0.0)
 
         #Ambient light is connected to 'LASER0'
         self._ambient_conf = rospy.Publisher('/flymad_micro/laser0/configuration',
@@ -54,8 +54,8 @@ class Experiment:
 
     def run(self):
         T_WAIT          = 40    #prestim
-        IR_BOUTS        = 3
-        T_IR_ON         = 15
+        IR_BOUTS        = 6
+        T_IR_ON         = 5
         T_IR_OFF        = 5
         T_WAIT2         = 60
         RED_BOUTS        = args.stimbouts
@@ -90,7 +90,7 @@ class Experiment:
                 for x in range(IR_BOUTS):
                     self._laser(IR_LASER | LASER0_ON | RED_LASER)
                     rospy.sleep(T_IR_ON)
-                    self._laser(LASER0_ON)
+                    self._laser(LASER0_ON | IR_LASER)
                     print '\a'  
                     rospy.sleep(T_IR_OFF)
                 #turn off
