@@ -2,6 +2,7 @@ import pandas as pd
 from pandas import DataFrame, Series
 import numpy as np
 import matplotlib
+from matplotlib import cm 
 import matplotlib.pyplot as plt
 import matplotlib.collections as collections
 from pytz import common_timezones
@@ -348,13 +349,15 @@ def sync_jaaba_with_ros(FMF_DIR):
         datadf['stim_duration'] = stim_duration
             
         try:
-            if stim_duration > 0:
+            if stim_duration >= 0:
                 datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp[(datadf.Laser2_state + datadf.Laser1_state) > 0.001].index[0]
-            elif stim_duration == 0:
-                datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp.index[0] - pd.to_datetime('60s')
-        except:
+            #elif stim_duration == 0:
+            #    datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp.index[0] - pd.to_datetime('60s')
+        except Exception,e:
+            traceback.print_exc() 
             print "WARNING:   Cannot synchronize by stimulus. Setting T0 to frame 900. "
             datadf['synced_time'] = datadf['Timestamp'] - datadf.Timestamp.index[900]
+            print str(e)
         datadf.index = datadf.synced_time
         datadf.index = pd.to_datetime(datadf.index)
 
@@ -462,7 +465,11 @@ def latency_measures(datadf): #takes input from unbinned datadf (during sync...)
         latency = (poststim.index[-1] - poststim.index[0]).total_seconds()
       return courted, latency
       
-      
+def get_colours(L):
+    """pass an integer (L), returns a list of length (L) with colour codes"""
+    colourlist = cm.Paired(np.linspace(0, 1, L))
+    return colourlist
+          
 def plot_latency_to_courtship(list_of_latencies):
     df = DataFrame(list_of_latencies, columns=['genotype', 'latency'])
     means = df.groupby('genotype').mean()
@@ -485,7 +492,25 @@ def gather_data(filelist):
         if WEI < WEI_THRESHOLD:
             print FLY_ID, " excluded from analysis, with wing extension index: " , WEI , "."
             continue
-
+        try:
+            
+            try:
+                DI = float(PC_dist[PC_dist <= 4.0].count()) / float(PC_dist.count())
+            except Exception,e:
+                PC_dist = fx[(fx.index >= pd.to_datetime(dTHRESH_ON*NANOSECONDS_PER_SECOND)) & (fx.index <= pd.to_datetime(dTHRESH_OFF*NANOSECONDS_PER_SECOND))]['dtarget']
+                DI = float(PC_dist[PC_dist <= 8.0].count()) / float(PC_dist.count())
+                #traceback.print_exc() 
+                #print 'ERROR distance...', FLY_ID
+                #print fx.columns
+                #print str(e)
+                
+            if DI < DI_THRESHOLD:
+                print FLY_ID, " excluded from analysis, with distance index: " , DI , "."
+                continue           
+        except: 
+            print FLY_ID, " ERROR: " , DI , "."
+            raise
+        
         fx['FlyID'] = FLY_ID
         datadf = pd.concat([datadf, fx])
     datadf.to_csv(DATADIR + HANDLE + '_rawdata_' + binsize + '.csv', sep=',')
@@ -653,8 +678,10 @@ if __name__ == "__main__":
                             help='integer and unit, such as "5s" or "4Min" or "500ms"')
     parser.add_argument('--experiment', type=str, required=False,
                             help='handle to select experiment from group (example: IRR-)')
-    parser.add_argument('--threshold', type=str, required=False, default="0-100-0", 
+    parser.add_argument('--wingthreshold', type=str, required=False, default="0-100-0", 
                             help='list threshold boundaries and threshold, delimited by -. ex: 60-120-0.5   =   minimum 0.5 WEI between 60s and 120s.')
+    parser.add_argument('--distthreshold', type=str, required=False, default="0-100-0", 
+                            help='list threshold boundaries and threshold, delimited by -. ex: 60-120-0.5   =   minimum 0.5 DI between 60s and 120s.')
     parser.add_argument('--pool_controls', type=str,  required=False, default = "",
                             help="list exact strings of control genotypes delimited by comma ex: DB204-GP-IRR,DB202-GP-IRR")
     parser.add_argument('--pool_experiment', type=str,  required=False, default = '',
@@ -671,6 +698,8 @@ if __name__ == "__main__":
                             help="Make True if you want to group by stimulus paradigm.")
     parser.add_argument('--stim_groups', type=str, required=False, default = "0,200,2000,6310,20000", 
                             help="pass a list of stimulus groups in a dose response.")
+    parser.add_argument('--colours', type=str, required=False, default = "'#0033CC','#33CC33','#FFAA00', '#CC3300', '#AAAAAA','#0032FF','r','c','m','y', '#000000', '#333333'", 
+                            help="pass a list of colour codes.")
     
     
        
@@ -682,8 +711,10 @@ if __name__ == "__main__":
     HANDLE = args.experiment
     MAKE_MOVIES = args.make_tracking_movie
     BAGS = DATADIR + 'BAGS'
-    THRESH_ON, THRESH_OFF, WEI_THRESHOLD = (args.threshold).split('-')
+    THRESH_ON, THRESH_OFF, WEI_THRESHOLD = (args.wingthreshold).split('-')
     THRESH_ON, THRESH_OFF, WEI_THRESHOLD = float(THRESH_ON), float(THRESH_OFF), float(WEI_THRESHOLD)
+    dTHRESH_ON, dTHRESH_OFF, DI_THRESHOLD = (args.distthreshold).split('-')
+    dTHRESH_ON, dTHRESH_OFF, DI_THRESHOLD = float(dTHRESH_ON), float(dTHRESH_OFF), float(DI_THRESHOLD)
     POOL_CONTROL = [str(item) for item in args.pool_controls.split(',')]
     POOL_EXP = [str(item) for item in args.pool_experiment.split(',')]
     #OUTPUT = args.outputdir
@@ -697,6 +728,9 @@ if __name__ == "__main__":
     binsize = (args.binsize)
     print "BINSIZE: ", binsize
     colourlist = ['#0033CC','#33CC33','#FFAA00', '#CC3300', '#AAAAAA','#0032FF','r','c','m','y', '#000000', '#333333']
+    if DOSE_RESPONSE:
+        colourlist = get_colours(len(STIM_GROUPS))
+    
     #colourlist = ['#202090','#202020','#AAAAAA','#009020', '#6699FF', '#333333','#0032FF','r','c','m','y', '#000000']
     #colourlist = ['#2020CC','#20CC20','#FFCC20','#CC2000','#202020']
     #colourlist = ['#CC2000','#2020CC','#20CC20','#FFCC20','#CC2000','#202020']
