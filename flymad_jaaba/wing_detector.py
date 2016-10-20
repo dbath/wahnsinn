@@ -91,7 +91,10 @@ class WingDetector(object):
             self.ERROR_DETECTED= False
             self.error_count = 0
             self.adjust_tracking_parameters = ((0,0,0),(0,0,0),(0,0,0))
-            self.detectWings(self.saveImage, False, frame_number)  #MAKE FIRST OPTION TRUE TO SAVE TRACKING MOVIES.
+            try:
+                self.detectWings(self.saveImage, False, frame_number)  #MAKE FIRST OPTION TRUE TO SAVE TRACKING MOVIES.
+            except:
+                continue
         print self.fmf_file.split('/')[-1], 100.0*self.total_errors/total_frames, '% error rate'
         return
 
@@ -401,7 +404,7 @@ class WingDetector(object):
 
         wingTips, wholeWings, wingArea = self.get_candidate_wings(imgray, kernel, headLine, centroid, backPoint, body_length, abd_length, axisLine, wingTips, wholeWings, wingArea, timestamp_FMT, distance, targ_dist)
 
-        polynomial = np.poly1d([  3.43428403e-09,  -3.48084109e-05,   1.21336675e-01])
+        polynomial = np.poly1d([  -15392.02683546,  29209.68050119,   3237.47165583])
 
         wingSets = pd.DataFrame({'Tips':wingTips, 'Shape':wholeWings, 'Area':wingArea, 'Theta':np.empty(len(wingTips)).fill(0)})
         wingSets['Theta'] = np.nan
@@ -419,11 +422,12 @@ class WingDetector(object):
         wingSets.loc[wingSets['Theta'] >= 0.0, 'Side'] = 'Left'
         wingSets.loc[wingSets['Side'] == 'Right','Theta'] *= -1.0
         #wingSets['polydif'] = (wingSets['Theta'] - polynomial(wingSets['Area'])) / (wingSets['Area']/20000.0)
-                        
+        wingSets = wingSets[wingSets['Area'] > ((polynomial(wingSets['Theta'])/1.5) -2000.0*wingSets['Theta'] -5000.0)]
+        wingSets = wingSets[wingSets['Area'] < ((polynomial(wingSets['Theta'])*1.3) +2000.0*wingSets['Theta'] + 3000.0)]
         wingSets = wingSets[(wingSets['Length'] >=250) & (wingSets['Length'] < 375)]
         wingSets = wingSets[(wingSets['Theta'] <= ((np.pi)/1.75) )]
         #wingSets = wingSets[(wingSets['polydif'] >= -0.8) & (wingSets['polydif'] <= 1.0)]
-        wingSets = wingSets[(wingSets['Area'] >= 2000) & (wingSets['Area'] <= 30000)]
+        wingSets = wingSets[(wingSets['Area'] >= 1000) & (wingSets['Area'] <= 30000)]
 
         
         try:
@@ -498,7 +502,7 @@ class WingDetector(object):
     def get_targets(self, fly_erased_img, headpoint, centroidpoint, _bodyAxis):
 
         kernel = np.ones((5,5),np.uint8)
-        _, mask = cv2.threshold(fly_erased_img, 70, 255, cv2.THRESH_BINARY)
+        _, mask = cv2.threshold(fly_erased_img, 60, 255, cv2.THRESH_BINARY)
         mask = cv2.erode(mask, kernel, iterations=1)
         contourImage = mask.copy()
         contourImage = np.pad(contourImage,((2,2),(2,2)), mode='maximum')
@@ -519,7 +523,7 @@ class WingDetector(object):
             if centroidCheck <=0:
                 if np.array_equal(hierarchy[h[3]], parent) :  #is in outer hierarchy (parent is edge.)  
                     if h[2] > 0:   # has child (targets have inner and outer edge)
-                        if (cv2.contourArea(c) <= 500000) & (cv2.contourArea(c) >= 20000):
+                        if (cv2.contourArea(c) <= 150000) & (cv2.contourArea(c) >= 20000):
                             ellipse = cv2.fitEllipse(c)
                             if not self.pointInEllipse(centroidpoint[0],centroidpoint[1],ellipse[0][0],ellipse[0][1],ellipse[1][0],ellipse[1][1],ellipse[2]):
                                 candidateTargets.append(c)
@@ -567,12 +571,15 @@ class WingDetector(object):
         
         edge = self.get_edge(imgray)
         if edge > 115:
-            wingThresh = int(0.75*edge + 12.0)
+            wingThresh = int(0.75*edge + 10.0)
             bodyThresh = int(0.45*edge + 2.5) 
         else:
-            wingThresh = int(0.75*edge + 15.0)
+            wingThresh = int(0.75*edge + 13.0)
             bodyThresh = int(0.55*edge + 2.5)
-        adjustments = [-5,0,5]
+        if distance >= 170:
+            adjustments = [-10,-5,0]
+        else:
+            adjustments = [-5,0,5]
         for a in adjustments:   
             #DEFINE bodyNotWings AS BODY PORTION PLUS LEGS ETC, USEFUL FOR FINDING WINGS.
             ret1, bodyNotWings = cv2.threshold(imgray, bodyThresh,255,cv2.THRESH_BINARY)
