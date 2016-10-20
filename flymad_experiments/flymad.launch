@@ -17,8 +17,7 @@
 
   <node name="gflymad" pkg="flymad" type="gflymad.py" />
 
-  <node name="fview_flytrax" pkg="flymad" type="launch_fview_flytrax.sh" />
-  <node name="fview_ttm" pkg="flymad" type="launch_fview_ttm.sh" />
+
 
   <node name="flymad_micro" pkg="flymad" type="flymad_micro_v2" >
     <param name="laser2/sense_resistor" type="double" value="0.3333333" />
