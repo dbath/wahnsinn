@@ -274,10 +274,11 @@ if __name__ == "__main__":
     state_means.to_pickle(DATADIR + 'HMM_state_means_'+ str(n_components) +'.pickle')
     state_means.to_csv(DATADIR + 'HMM_state_means_'+ str(n_components) +'.csv', sep=',')
     print state_means.groupby('group').mean()
-    
+    """
     if args.pool_controls:
         transmat.loc[transmat['g1'] =='DB072', 'g1'] = 'ctrl'
         transmat.loc[transmat['g1'] =='DB185', 'g1'] = 'ctrl'
+    """
     p_values = pd.DataFrame()
     grouped = transmat.groupby(['g1','g3','FlyID'])
     for t in tmatcolumns[2:]:
@@ -290,7 +291,7 @@ if __name__ == "__main__":
         
     signif = p_values[p_values['p'] < 0.05]
     print signif 
-    
+    """
     
     wVS = pd.DataFrame(wing_vs_state, columns=['state','distance','angle']).dropna() 
     wVS['distance'] = wVS['distance'].max() - wVS['distance']
@@ -303,7 +304,7 @@ if __name__ == "__main__":
     wVS.to_pickle('/tier2/dickson/bathd/FlyMAD/data_for_processing/160223_adt2sil_DR/HMM_groups_test.pickle')
     colours = cm.rainbow(np.linspace(0, 1, n_components))   
     colours = ["#0000FF", "#FF0000"]
-
+    """
 
         
         

@@ -82,7 +82,7 @@ if __name__ == "__main__":
     
     image_width = vid.get_frame(0)[0].shape[1]
     
-    for frame_number in range(8000):
+    for frame_number in range(vid.get_n_frames()):
                 
         if os.path.exists(savedir + '/temp_png/_tmp%05d.png'%(frame_number)):
             continue
