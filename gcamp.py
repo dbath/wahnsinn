@@ -159,14 +159,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--experiment', type=str, required=True,
                         help='path and filename of csv containing experiment info')
-    parser.add_argument('--savedir', type=str, required=False, default='undefined'
+    parser.add_argument('--savedir', type=str, required=False, default='undefined',
                 help='path to save directory, default is same directory as experiment file')
 
     args = parser.parse_args()
     
     if args.savedir == 'undefined':
         SAVEDIR = args.experiment.rsplit('/',1)[0]
-    else
+    else:
         SAVEDIR = args.SAVEDIR
 
     if not SAVEDIR[-1] == '/':
@@ -190,41 +190,41 @@ if __name__ == "__main__":
     datadf = pd.DataFrame()
 
     for expNum in range(len(jdict)):
-        try:
-            calcdata = pd.read_table(jdict['calcfn'][expNum])
-            print jdict['calcfn'][expNum]
-            filename = '-'.join((jdict['calcfn'][expNum]).split('p1-mAL-trp/')[1].split('/')).split('.txt')[0] + '.png'
-            genotype = jdict['GENOTYPE'][expNum]
-            calccolumn = calcdata.columns[jdict['calcColNum'][expNum]-1]
-            bgcol = calcdata.columns[jdict['bgColNum'][expNum]-1]
-            lightcolumn = jdict['lightColName'][expNum]
-            
-            calcdata = calcdata[:-1]
-            calcdata.index = pd.to_datetime(calcdata['Time [s]'], unit='s')
-            calcdata['df'] = calcdata[calccolumn] - calcdata[bgcol]
-            baseline = calcdata[calcdata.index <= pd.to_datetime(BASELINE_DURATION*1E9)]['df'].mean()
-            calcdata['dff'] = (calcdata['df'] - baseline) / baseline
-
-            
-            tempdf = calcdata[['Time [s]','dff',lightcolumn]].resample(SAMPLING_RATE)
-            tempdf.columns = ['Time','dff','Light']
-            tempdf['ExpID'] = filename.split('.png')[0]
-            tempdf['Genotype'] = genotype
-            datadf = pd.concat([datadf,tempdf], axis=0)
-            
-            
-            fig = plt.figure()
-            axA = fig.add_subplot(111)
-            twin_axis_plot(tempdf.index, tempdf['dff'], tempdf['Light'], 'Time (hh:mm:ss)', 'dF/F0', 'Lightstim')
-            
-            plt.savefig(SAVEDIR+filename)
-            plt.close('all')
+        #try:
+        calcdata = pd.read_table(jdict['calcfn'][expNum])
+        print jdict['calcfn'][expNum]
+        filename = '-'.join((jdict['calcfn'][expNum]).split(SAVEDIR.split('/')[-2])[1].split('/')).split('.txt')[0] + '.png'
+        genotype = jdict['GENOTYPE'][expNum]
+        calccolumn = calcdata.columns[jdict['calcColNum'][expNum]-1]
+        bgcol = calcdata.columns[jdict['bgColNum'][expNum]-1]
+        #lightcolumn = jdict['lightColName'][expNum]
         
+        calcdata = calcdata[:-1]
+        calcdata.index = pd.to_datetime(calcdata['Time [s]'], unit='s')
+        calcdata['df'] = calcdata[calccolumn] - calcdata[bgcol]
+        baseline = calcdata[calcdata.index <= pd.to_datetime(BASELINE_DURATION*1E9)]['df'].mean()
+        calcdata['dff'] = (calcdata['df'] - baseline) / baseline
+
+        
+        tempdf = calcdata[['Time [s]','dff']].resample(SAMPLING_RATE)
+        tempdf.columns = ['Time','dff']
+        tempdf['ExpID'] = filename.split('.png')[0]
+        tempdf['Genotype'] = genotype
+        datadf = pd.concat([datadf,tempdf], axis=0)
+        
+        
+        fig = plt.figure()
+        axA = fig.add_subplot(111)
+        twin_axis_plot(tempdf.index, tempdf['dff'], tempdf['dff'], 'Time (hh:mm:ss)', 'dF/F0', 'dF/F0')
+        
+        plt.savefig(SAVEDIR+filename)
+        plt.close('all')
+        '''
         except:
             print 'ERROR PROCESSING:', jdict['calcfn'][expNum]
             continue
         
-        
+        '''
     g = datadf.groupby(['Genotype',datadf.index])
 
     g.mean().unstack(level=0)['dff'].plot()

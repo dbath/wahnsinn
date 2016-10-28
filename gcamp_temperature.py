@@ -166,7 +166,7 @@ if __name__ == "__main__":
     
     if args.savedir == 'undefined':
         SAVEDIR = args.experiment.rsplit('/',1)[0]
-    else
+    else:
         SAVEDIR = args.SAVEDIR
 
     if not SAVEDIR[-1] == '/':
@@ -194,7 +194,7 @@ if __name__ == "__main__":
         try:
             calcdata = pd.read_table(jdict['calcfn'][expNum])
             print jdict['calcfn'][expNum]
-            filename = '-'.join((jdict['calcfn'][expNum]).split('p1-mAL-trp/')[1].split('/')).split('.txt')[0] + '.png'
+            filename = '-'.join((jdict['calcfn'][expNum]).split(SAVEDIR.split('/')[-2])[1].split('/')).split('.txt')[0] + '.png'
             genotype = jdict['GENOTYPE'][expNum]
             calccolumn = calcdata.columns[jdict['calcColNum'][expNum]-1]
             bgcol = calcdata.columns[jdict['bgColNum'][expNum]-1]
