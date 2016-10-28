@@ -183,7 +183,6 @@ if __name__ == "__main__":
     jdict = pd.read_csv(args.experiment)
     jdict = jdict[jdict['GENOTYPE'].notnull()]
     jdict['calcfn'] = ['/groups/dickson/dicksonlab' + z.split('Z:')[1] for z in jdict['calcfn'].values]
-    jdict['tempfn'] = ['/groups/dickson/dicksonlab' + z.split('Z:')[1] for z in jdict['tempfn'].values]
     jdict = jdict[jdict['DATE'] >= 160919]
     jdict['notes'] = jdict['notes'].fillna('')
     #jdict = jdict[jdict['notes'].str.contains('Acetylcholine')]
@@ -198,8 +197,6 @@ if __name__ == "__main__":
             genotype = jdict['GENOTYPE'][expNum]
             calccolumn = calcdata.columns[jdict['calcColNum'][expNum]-1]
             bgcol = calcdata.columns[jdict['bgColNum'][expNum]-1]
-            tempdata = pd.read_table(jdict['tempfn'][expNum])
-            tempcolumn = jdict['tempColName'][expNum]
             lightcolumn = jdict['lightColName'][expNum]
             
             calcdata = calcdata[:-1]
@@ -207,28 +204,18 @@ if __name__ == "__main__":
             calcdata['df'] = calcdata[calccolumn] - calcdata[bgcol]
             baseline = calcdata[calcdata.index <= pd.to_datetime(BASELINE_DURATION*1E9)]['df'].mean()
             calcdata['dff'] = (calcdata['df'] - baseline) / baseline
-            
-            tempdata.index = pd.to_datetime(tempdata['Time'], unit='s')
-            #tempdata = tempdata[tempcolumn]
-            #tempdata.columns = ['Temperature']
 
-            foo = calcdata.merge(tempdata, how='outer', left_index=True, right_index=True).resample(SAMPLING_RATE)
             
-            tempdf = foo[['Time [s]','dff',tempcolumn,lightcolumn]]
-            tempdf.columns = ['Time','dff','Temperature','Light']
+            tempdf = calcdata[['Time [s]','dff',lightcolumn]].resample(SAMPLING_RATE)
+            tempdf.columns = ['Time','dff','Light']
             tempdf['ExpID'] = filename.split('.png')[0]
             tempdf['Genotype'] = genotype
             datadf = pd.concat([datadf,tempdf], axis=0)
             
             
             fig = plt.figure()
-            axA = fig.add_subplot(211)
-            twin_axis_plot(foo.index, foo['dff'], foo['28 Temp'], 'Time (hh:mm:ss)', 'dF/F0', 'Temperature (C)')   
-            axB = fig.add_subplot(212)
-            colorline(foo['28 Temp'], foo['dff'])
-            axB.set_xlabel('Temperature (C)')
-            axB.set_ylabel('dF/F0')
-            plt.subplots_adjust(hspace=0.75)
+            axA = fig.add_subplot(111)
+            twin_axis_plot(tempdf.index, tempdf['dff'], tempdf['Light'], 'Time (hh:mm:ss)', 'dF/F0', 'Lightstim')
             
             plt.savefig(SAVEDIR+filename)
             plt.close('all')
@@ -242,9 +229,7 @@ if __name__ == "__main__":
 
     g.mean().unstack(level=0)['dff'].plot()
     plt.xlim(pd.to_datetime(0),pd.to_datetime(600*1e9))
-     
-    g.mean().unstack(level=0)['Temperature'].plot()
-    plt.xlim(pd.to_datetime(0),pd.to_datetime(600*1e9))
+
     plt.show()
 
     means = g.mean()
@@ -265,28 +250,11 @@ if __name__ == "__main__":
         tl.set_color('b')
     ax2 = ax1.twinx()
     print t.columns
-    ax2.plot(t['Time'], t['Temperature'], 'k.')
-    ax2.set_ylabel('Temperature (C)', color='k')
+    ax2.plot(t['Time'], t['Light'], 'k.')
+    ax2.set_ylabel('Laser', color='k')
     #ax2.set_ylim(0,32)
     plt.show() 
-        
-    fig = plt.figure()
-    ax1 = fig.add_subplot(111)
-    plot_data(means,sems, ns, 'Temperature',ax1)
 
-    t = datadf.groupby([datadf.index]).mean().reset_index()
-    ax1.set_xlabel('Time')
-    # Make the y-axis label and tick labels match the line color.
-    ax1.set_ylabel('Temperature', color='k')
-    for tl in ax1.get_yticklabels():
-        tl.set_color('b')
-    ax2 = ax1.twinx()
-    print t.columns
-    ax2.plot(t['Time'], t['Temperature'], 'k.')
-    ax2.set_ylabel('Temperature (C)', color='k')
-    #ax2.set_ylim(0,32)
-    plt.show()    
-        
 
 
 
