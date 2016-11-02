@@ -211,7 +211,7 @@ if __name__ == "__main__":
         tempdf.columns = ['Time','dff']
         tempdf['ExpID'] = filename.split('.png')[0]
         tempdf['Genotype'] = genotype
-        tempdf.to_csv('-'.join((jdict['calcfn'][expNum]).split(SAVEDIR.split('/')[-2])[1].split('/')).split('.txt')[0] + '.csv', sep=',')
+        tempdf.to_csv('-'.join((jdict['calcfn'][expNum]).split('/')[-3:]).rsplit('.',1)[0] + '.csv', sep=',')
         datadf = pd.concat([datadf,tempdf], axis=0)
         
         
