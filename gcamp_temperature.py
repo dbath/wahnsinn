@@ -159,7 +159,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--experiment', type=str, required=True,
                         help='path and filename of csv containing experiment info')
-    parser.add_argument('--savedir', type=str, required=False, default='undefined'
+    parser.add_argument('--savedir', type=str, required=False, default='undefined',
                 help='path to save directory, default is same directory as experiment file')
 
     args = parser.parse_args()
