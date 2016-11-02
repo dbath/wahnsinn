@@ -183,7 +183,7 @@ if __name__ == "__main__":
     jdict = pd.read_csv(args.experiment)
     jdict = jdict[jdict['GENOTYPE'].notnull()]
     jdict['calcfn'] = ['/groups/dickson/dicksonlab' + z.split('Z:')[1] for z in jdict['calcfn'].values]
-    jdict = jdict[jdict['DATE'] >= 160919]
+    #jdict = jdict[jdict['DATE'] >= 160919]
     jdict['notes'] = jdict['notes'].fillna('')
     #jdict = jdict[jdict['notes'].str.contains('Acetylcholine')]
     jdict = jdict[jdict['include'] == 1].reset_index()
@@ -211,6 +211,7 @@ if __name__ == "__main__":
         tempdf.columns = ['Time','dff']
         tempdf['ExpID'] = filename.split('.png')[0]
         tempdf['Genotype'] = genotype
+        tempdf.to_csv('-'.join((jdict['calcfn'][expNum]).split(SAVEDIR.split('/')[-2])[1].split('/')).split('.txt')[0] + '.csv', sep=',')
         datadf = pd.concat([datadf,tempdf], axis=0)
         
         
@@ -235,7 +236,10 @@ if __name__ == "__main__":
 
     means = g.mean()
     sems = g.sem()
-    ns = g.count() 
+    ns = g.count()
+    means.to_csv(SAVEDIR + 'means.csv', sep=',')
+    sems.to_csv(SAVEDIR + 'sems.csv', sep=',')
+    ns.to_csv(SAVEDIR + 'ns.csv', sep=',')
     colourlist = ['#FF0000','#009020','#0000CC']
     fig = plt.figure()
     ax1 = fig.add_subplot(111)
