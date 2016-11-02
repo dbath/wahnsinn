@@ -194,7 +194,8 @@ if __name__ == "__main__":
         try:
             calcdata = pd.read_table(jdict['calcfn'][expNum])
             print jdict['calcfn'][expNum]
-            filename = '-'.join((jdict['calcfn'][expNum]).split(SAVEDIR.split('/')[-2])[1].split('/')).split('.txt')[0] + '.png'
+            #filename = '-'.join((jdict['calcfn'][expNum]).split(SAVEDIR.split('/')[-2])[1].split('/')).split('.txt')[0] + '.png'
+            filename = '-'.join((jdict['calcfn'][expNum]).split('/')[-3:]).rsplit('.',1)[0] + '.png'
             genotype = jdict['GENOTYPE'][expNum]
             calccolumn = calcdata.columns[jdict['calcColNum'][expNum]-1]
             bgcol = calcdata.columns[jdict['bgColNum'][expNum]-1]
