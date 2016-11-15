@@ -138,7 +138,8 @@ def get_laser_states(BAG_FILE):
         l1.append(int('{0:04b}'.format(int(laser_data['Laser_state'].ix[x]))[-2]))
         l2.append(int('{0:04b}'.format(int(laser_data['Laser_state'].ix[x]))[-3]))
     laser_channels = DataFrame({'Timestamp':lTime, 'Laser0_state':l0, 'Laser1_state':l1, 'Laser2_state':l2}, dtype=np.float64)
-    laser_channels = laser_channels[laser_channels.Timestamp > min(config_msg_times) ] 
+    if len(config_msg_times) > 0:
+        laser_channels = laser_channels[laser_channels.Timestamp > min(config_msg_times) ]
     laser_channels = convert_timestamps(laser_channels)
     return laser_channels
 
