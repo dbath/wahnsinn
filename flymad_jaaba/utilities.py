@@ -131,7 +131,7 @@ def get_laser_states(BAG_FILE):
     l0 = []
     l1 = []
     l2 = []
-    
+       
     for x in laser_data.index:
         lTime.append(laser_data.Timestamp.ix[x])
         l0.append(int('{0:04b}'.format(int(laser_data['Laser_state'].ix[x]))[-1]))
@@ -162,6 +162,7 @@ def detect_stim_bouts(datadf, column):
         first_TS = datadf.index[ons[0]]
         last_TS = datadf.index[offs[-1]]
     else:
+        number_of_bouts = 1
         bout_duration = 0
         first_TS = datadf.index[0]
         last_TS = datadf.index[0]
