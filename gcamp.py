@@ -193,7 +193,7 @@ if __name__ == "__main__":
         #try:
         calcdata = pd.read_table(jdict['calcfn'][expNum])
         print jdict['calcfn'][expNum]
-        filename = '-'.join((jdict['calcfn'][expNum]).split('/')[-3:]).rsplit('.',1)[0] + '.png'
+        filename = '-'.join((jdict['calcfn'][expNum]).split('/')[-3:]).rsplit('.',1)[0] + '_' + str(expNum) + '.png'
         #filename = '-'.join((jdict['calcfn'][expNum]).split(SAVEDIR.split('/')[-2])[1].split('/')).split('.txt')[0] + '.png'
         genotype = jdict['GENOTYPE'][expNum]
         calccolumn = calcdata.columns[jdict['calcColNum'][expNum]-1]
@@ -211,7 +211,7 @@ if __name__ == "__main__":
         tempdf.columns = ['Time','dff']
         tempdf['ExpID'] = filename.split('.png')[0]
         tempdf['Genotype'] = genotype
-        tempdf.to_csv(SAVEDIR + '-'.join((jdict['calcfn'][expNum]).split('/')[-3:]).rsplit('.',1)[0] + '.csv', sep=',')
+        tempdf.to_csv(SAVEDIR + '-'.join((jdict['calcfn'][expNum]).split('/')[-3:]).rsplit('.',1)[0] + '_' + str(expNum) + '.csv', sep=',')
         datadf = pd.concat([datadf,tempdf], axis=0)
         
         
