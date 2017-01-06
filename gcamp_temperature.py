@@ -8,6 +8,7 @@ import matplotlib.transforms as mtransforms
 import matplotlib.collections as collections
 from matplotlib.collections import LineCollection
 from matplotlib.colors import ListedColormap, BoundaryNorm
+from scipy import stats as st
 
 
 def twin_axis_plot(xvar, var1, var2, xlabel, label1, label2):
@@ -96,7 +97,18 @@ def plot_data(means, sems, ns, measurement, ax):
     return
 
 
+def get_stats( _df):
 
+    ROI_START = _df[_df.Light > 0].index[-1]+1 #index of _df to start critical region
+    ROI_END = _df[_df.Temperature > 26.0].index[0] #index of _df to end critical region
+    BASELINE_END = _df[_df.Light > 0].index[0]
+    baseline = _df[0:BASELINE_END]
+    #roi = _df[ROI_START: ROI_END]
+    pvals = []
+    for x in _df[ROI_START:ROI_END].index:
+        pvals.append(st.kruskal(baseline['dff'], _df.loc[x:x+1, 'dff')[1])
+
+    return np.array(pvals).mean()
 
 ############################################multi-colour tools   ########################################################################
 
@@ -161,6 +173,8 @@ if __name__ == "__main__":
                         help='path and filename of csv containing experiment info')
     parser.add_argument('--savedir', type=str, required=False, default='undefined',
                 help='path to save directory, default is same directory as experiment file')
+    parser.add_argument('--tresholds', type=int, required=False, default='undefined',
+                help='List the upper and lower bounds of acceptable pvalues during the post-opto pre-thermo time period. eg: "0.05,0.0001"')
 
     args = parser.parse_args()
     
@@ -171,6 +185,11 @@ if __name__ == "__main__":
 
     if not SAVEDIR[-1] == '/':
         SAVEDIR = SAVEDIR + '/'
+
+    if args.thresholds != 'undefined':
+        LOWER_BOUND, UPPER_BOUND = [float(x) for x in args.thresholds.split(',')]
+    else:
+        LOWER_BOUND, UPPER_BOUND = [0, 1]
 
 
 
@@ -206,8 +225,8 @@ if __name__ == "__main__":
             calcdata = calcdata[:-1]
             calcdata.index = pd.to_datetime(calcdata['Time [s]'], unit='s')
             calcdata['df'] = calcdata[calccolumn] - calcdata[bgcol]
-            baseline = calcdata[calcdata.index <= pd.to_datetime(BASELINE_DURATION*1E9)]['df'].mean()
-            calcdata['dff'] = (calcdata['df'] - baseline) / baseline
+            baseline = calcdata[calcdata.index <= pd.to_datetime(BASELINE_DURATION*1E9)]['df']
+            calcdata['dff'] = (calcdata['df'] - baseline.mean()) / baseline.mean()
             
             tempdata.index = pd.to_datetime(tempdata['Time'], unit='s')
             #tempdata = tempdata[tempcolumn]
@@ -220,7 +239,13 @@ if __name__ == "__main__":
             tempdf['ExpID'] = filename.split('.png')[0]
             tempdf['Genotype'] = genotype
             tempdf.to_csv(SAVEDIR +'-'.join((jdict['calcfn'][expNum]).split('/')[-3:]).rsplit('.',1)[0] + '_' + str(expNum) + '.csv', sep=',')
-            datadf = pd.concat([datadf,tempdf], axis=0)
+            
+            #############  RESPONSE-DEPENDENT MERGE HERE
+            checkthis = get_stats(tempdf) ####
+            print checkthis
+            
+            if checkthis < UPPER_BOUND:
+                datadf = pd.concat([datadf,tempdf], axis=0)
             
             
             fig = plt.figure()
