@@ -42,10 +42,20 @@ def strings_to_ints(col):
         numlist.append(names.index(x))
     return numlist
     
-
-
+def delete_repeats(v, l):
+    arrays = np.split(v, np.cumsum(l)[:-1])
+    new_lengths = []
+    new_v = np.array([])
+    for x in range(len(arrays)):
+        vals = np.append(arrays[x][:-1][np.diff(arrays[x]) != 0], arrays[x][-1])
+        new_lengths.append(len(vals))
+        new_v = np.append(new_v, vals)
+    return new_v, new_lengths
+        
 def get_transmat(model, values, lengths, _type):
     "returns the transition matrix with sorted axes as dataframe or numpy array"
+    if DELETE_REPEATS:
+        values, lengths = delete_repeats(values, lengths)
     #fit a markov model to the data
     model.fit(np.atleast_2d(values).T, lengths)
     #define the index (gets randomized by model.fit())
@@ -73,7 +83,7 @@ def permute_CI_values(model, values, lengths, reps):
     """
     T = get_transmat(model, values, lengths, 'array')
     C = np.zeros(T.shape) # accumulates where B>=T
-    D = np.zeros(T.shape) # accumulates where C<=T
+    D = np.zeros(T.shape) # accumulates where B<=T
     for x in range(reps):
         rand = np.random.permutation(values) #randomize
         B = get_transmat(model, rand, lengths, 'array') #generate transition matrix from random sequence
@@ -87,6 +97,8 @@ DATAFILES = '/home/dbath/Documents/170322_claire_vcode_data/*-evts.txt'
 scores = ['wing extension','medPE','attempted copulation','bothlegs']
 behaviours = ['a_wingExt','b_probExt','c_abBend','d_legLift']
 
+REVERSED = True
+DELETE_REPEATS = True
 
 #DO THE ANALYSIS FOR EACH EXPERIMENT FILE
 list_of_datasets=[]
@@ -94,7 +106,10 @@ lengths=[]
 for _fn in glob.glob(DATAFILES):
     dataset, fulldf = process_file(_fn)
     fulldf['intlist'] = strings_to_ints(fulldf['current'].copy())
-    list_of_datasets.append(fulldf['intlist'])
+    if REVERSED:
+        list_of_datasets.append([i for i in reversed(fulldf['intlist'])])
+    else:
+        list_of_datasets.append(fulldf['intlist'])
     lengths.append(len(fulldf))
     
 observed_states = np.concatenate(list_of_datasets) 
@@ -113,36 +128,73 @@ print "CI(transition less than null hypothesis: \n", c
 print "CI(transition more than null hypothesis: \n", d
 
 #SAVE THE RESULTS
-t.to_csv(DATAFILES.rsplit('/',1)[-1] + '/transition_matrix.csv')
-c.to_csv(DATAFILES.rsplit('/',1)[-1] + '/CI_t_less_than_random.csv')
-d.to_csv(DATAFILES.rsplit('/',1)[-1] + '/CI_t_more_than_random.csv')
+idt = ['W','P','A','L']
+pd.DataFrame(t, columns = idt, index=idt).to_csv(DATAFILES.rsplit('/',1)[0] + '/transition_matrix.csv')
+pd.DataFrame(c, columns = idt, index=idt).to_csv(DATAFILES.rsplit('/',1)[0] + '/CI_t_less_than_random.csv')
+pd.DataFrame(d, columns = idt, index=idt).to_csv(DATAFILES.rsplit('/',1)[0] + '/CI_t_more_than_random.csv')
 
 
 """
 RESULTS:
 
-['a_wingExt', 'b_probExt', 'c_abBend', 'd_legLift']
 
-Transition Matrix:  
 
-[[ 0.6872428   0.26337449  0.04115226  0.00823045]
- [ 0.26573427  0.30769231  0.34965035  0.07692308]
- [ 0.20833333  0.25        0.08333333  0.45833333]
- [ 0.2         0.38181818  0.14545455  0.27272727]]
- 
-CI(transition less than null hypothesis:
 
-[[  0.     0.7837   1.       1.    ]
- [  1.     0.1835   0.       0.9616]
- [  1.     0.7156   0.9233   0.    ]
- [  1.     0.0367   0.4737   1.    ]]
- 
-CI(transition more than null hypothesis:
+Forward direction, self-transitions removed
 
-[[ 1.      0.2163  0.      0.    ]
- [ 0.      0.8167  1.      0.0384]
- [ 0.      0.285   0.0768  1.    ]
- [ 0.      0.9633  0.5263  0.9999]]
 
+Transition matrix:
+
+       W         P         A         L
+W  0.000000  0.842105  0.131579  0.026316
+P  0.383838  0.000000  0.505051  0.111111
+A  0.227273  0.272727  0.000000  0.500000
+L  0.275000  0.525000  0.200000  0.000000
+
+
+Confidence that transitions less than Ho:
+
+      W       P       A       L
+W  1.0000  0.0000  0.9999  1.0000
+P  1.0000  1.0000  0.0000  0.9475
+A  1.0000  0.8351  1.0000  0.0000
+L  0.9997  0.0010  0.2037  1.0000
+
+
+Confidence that transitions more than Ho:
+
+      W       P       A       L
+W  1.0000  1.0000  0.0001  0.0000
+P  0.0000  1.0000  1.0000  0.0525
+A  0.0000  0.1649  0.9980  1.0000
+L  0.0003  0.9990  0.7965  0.9981
+
+
+
+Reverse direction, self-transitions removed
+
+Transition matrix:
+       W         P         A         L
+W  0.000000  0.593750  0.234375  0.171875
+P  0.621359  0.000000  0.174757  0.203883
+A  0.147059  0.735294  0.000000  0.117647
+L  0.043478  0.239130  0.717391  0.000000
+
+
+Confidence that transitions less than Ho:
+      
+      W       P       A       L
+W  1.0000  0.0135  0.8358  0.9552
+P  0.7171  1.0000  0.7223  0.0853
+A  0.9999  0.0001  1.0000  0.6478
+L  1.0000  0.8966  0.0000  1.0000
+
+Confidence that transitions more than Ho:
+
+      W       P       A       L
+W  1.0000  0.9865  0.1642  0.0449
+P  0.2831  1.0000  0.2779  0.9147
+A  0.0001  0.9999  0.9990  0.3522
+L  0.0000  0.1034  1.0000  0.9990
 """
 
